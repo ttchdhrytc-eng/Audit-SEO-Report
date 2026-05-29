@@ -27,12 +27,15 @@ export function getApiUrl(path: string): string {
     const hostname = window.location.hostname;
     const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
     const isContainer = hostname.endsWith("run.app");
+    const isGooglePreview = hostname.includes("google") || hostname.includes("applet") || hostname.includes("preview");
     
-    if (!isLocal && !isContainer) {
-      const defaultBackend = "https://ais-pre-jh73tlf3ma53ancchisqut-234509423251.asia-southeast1.run.app";
-      const cleanPath = path.replace(/^\/+/, '');
-      return `${defaultBackend}/${cleanPath}`;
+    if (isLocal || isContainer || isGooglePreview) {
+      return path;
     }
+
+    const defaultBackend = "https://ais-pre-jh73tlf3ma53ancchisqut-234509423251.asia-southeast1.run.app";
+    const cleanPath = path.replace(/^\/+/, '');
+    return `${defaultBackend}/${cleanPath}`;
   }
 
   return path;

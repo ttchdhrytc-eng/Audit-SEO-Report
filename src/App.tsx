@@ -849,10 +849,10 @@ export default function App() {
                   <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-3xl">
                     <div className="space-y-0.5">
                       <h3 className="font-bold text-slate-850 font-display text-sm">Active Auditor Work-Stream</h3>
-                      <p className="text-xs text-slate-450 font-sans">Showing recently compiled SEO evaluation reports</p>
+                      <p className="text-xs text-slate-450 font-sans">Showing last 5 compiled SEO evaluation reports</p>
                     </div>
                     <span className="text-[10px] font-mono uppercase tracking-wider bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold">
-                      {scannedAudits.length} Properties
+                      {Math.min(5, scannedAudits.length)} of {scannedAudits.length} Properties
                     </span>
                   </div>
 
@@ -869,7 +869,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="text-xs divide-y divide-slate-100 font-sans">
-                        {scannedAudits.map((aud) => {
+                        {scannedAudits.slice(0, 5).map((aud) => {
                           const isWorse = aud.overallScore < 60;
                           return (
                             <tr key={aud.id} className="hover:bg-slate-50/50 transition">
