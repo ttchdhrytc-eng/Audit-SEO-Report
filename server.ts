@@ -51,6 +51,48 @@ if (GEMINI_API_KEY) {
   console.warn("GEMINI_API_KEY environment variable is not defined - running in simulation-enhanced mode");
 }
 
+// Robust Gemini content generation module with exponential retry and model fallback support
+async function safeGenerateContent(params: {
+  contents: any;
+  config?: any;
+}): Promise<any> {
+  if (!ai) {
+    throw new Error("Gemini API client is not initialized");
+  }
+
+  const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    // Retry up to 2 times for each model
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(`Calling Gemini API using model: ${model} (attempt ${attempt}/2)`);
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: params.contents,
+          config: params.config,
+        });
+
+        if (response && (response.text || response.candidates)) {
+          return response;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Attempt ${attempt} for model ${model} failed:`, err.message || err);
+        
+        // Wait a short delay before trying another attempt of the same model
+        if (attempt < 2) {
+          const delay = attempt * 1200;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to generate content after all model retries");
+}
+
 // In-Memory Database for Leads CRM and Saved Audits
 interface DB {
   leads: Array<{
@@ -903,9 +945,9 @@ app.post("/api/audit", async (req, res) => {
         const psiUrl = `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetForPsi)}&category=performance&category=seo&key=${PAGESPEED_API_KEY}`;
         console.log(`Calling Google PageSpeed Insights API for root url: ${targetForPsi}`);
 
-        // 5 second response limit for speed to prevent gateway timeouts
+        // Raised response limit to 25 seconds because PageSpeed Insights crawler/Lighthouse takes 10-25 seconds to complete. This resolves AbortError issues.
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
         const psiResponse = await fetch(psiUrl, { signal: controller.signal });
         clearTimeout(timeoutId);
 
@@ -997,8 +1039,7 @@ app.post("/api/audit", async (req, res) => {
       `;
 
       console.log("Calling Gemini AI to enrich the SEO copywriting report...");
-      const aiResponse = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const aiResponse = await safeGenerateContent({
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1396,8 +1437,7 @@ app.post("/api/keyword-strategist", async (req, res) => {
       `;
 
       console.log(`Calling Gemini to generate Keyword Strategist report for seed: ${seedWord}, domain: ${cleanDomain}`);
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await safeGenerateContent({
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1470,8 +1510,7 @@ app.post("/api/keyword-strategist/outline", async (req, res) => {
       `;
 
       console.log(`Calling Gemini to generate outline for keyword: ${targetKeyword}`);
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await safeGenerateContent({
         contents: prompt,
         config: {
           responseMimeType: "application/json",
