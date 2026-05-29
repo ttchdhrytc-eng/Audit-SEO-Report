@@ -17,6 +17,7 @@ import { CompetitorGapPanel } from './components/CompetitorGapPanel';
 import { LocalSeoPanel } from './components/LocalSeoPanel';
 import { AiRoadmapPanel } from './components/AiRoadmapPanel';
 import { AiOutreachScriptPanel } from './components/AiOutreachScriptPanel';
+import { GoogleSearchConsolePanel } from './components/GoogleSearchConsolePanel';
 import { PublicReportView } from './components/PublicReportView';
 import { 
   Building2, 
@@ -66,7 +67,7 @@ export default function App() {
   const [scanAuditType, setScanAuditType] = useState<'Standard' | 'Enterprise' | 'Local'>('Standard');
 
   // Diagnostic Sub-tabs under scanner
-  const [activeReportSubTab, setActiveReportSubTab] = useState<'summary' | 'technical' | 'onpage' | 'competitors' | 'local' | 'ai-roadmap' | 'outreach'>('summary');
+  const [activeReportSubTab, setActiveReportSubTab] = useState<'summary' | 'technical' | 'onpage' | 'competitors' | 'local' | 'ai-roadmap' | 'outreach' | 'gsc'>('summary');
 
   // Bulk Engine Campaign Inputs & Progress
   const [bulkListInput, setBulkListInput] = useState<string>(
@@ -125,6 +126,25 @@ export default function App() {
         setPublicReportDomain(domainVal);
       }
     }
+  }, []);
+
+  // Listen for Google OAuth callback updates from auth popup
+  useEffect(() => {
+    const handleGoogleMessage = (event: MessageEvent) => {
+      // Allow local or .run.app origins
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+        return;
+      }
+      if (event.data?.type === 'GOOGLE_OAUTH_SUCCESS') {
+        const token = event.data.token;
+        localStorage.setItem('google_gsc_token', token);
+        // Alert other listening components to fetch new tokens automatically
+        window.dispatchEvent(new CustomEvent('gsc_token_updated', { detail: token }));
+      }
+    };
+    window.addEventListener('message', handleGoogleMessage);
+    return () => window.removeEventListener('message', handleGoogleMessage);
   }, []);
 
   useEffect(() => {
@@ -1197,6 +1217,14 @@ export default function App() {
                     >
                       ✉ AI Outreach Marketing Script
                     </button>
+                    <button
+                      type="button"
+                      id="report-gsc-tab"
+                      onClick={() => setActiveReportSubTab('gsc')}
+                      className={`px-4 py-2.5 text-xs font-semibold bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-t-xl whitespace-nowrap transition border-b-2 cursor-pointer border-transparent ${activeReportSubTab === 'gsc' ? 'border-blue-600 font-extrabold text-blue-850' : ''}`}
+                    >
+                      📈 Google Search Console (Live)
+                    </button>
                   </div>
 
                   {/* Render targeted panels */}
@@ -1208,6 +1236,7 @@ export default function App() {
                     {activeReportSubTab === 'local' && <LocalSeoPanel report={activeReport} />}
                     {activeReportSubTab === 'ai-roadmap' && <AiRoadmapPanel report={activeReport} />}
                     {activeReportSubTab === 'outreach' && <AiOutreachScriptPanel report={activeReport} />}
+                    {activeReportSubTab === 'gsc' && <GoogleSearchConsolePanel report={activeReport} />}
                   </div>
 
                 </div>

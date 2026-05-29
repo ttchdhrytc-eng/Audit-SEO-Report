@@ -1138,6 +1138,91 @@ app.get("/api/bulk-jobs", (req, res) => {
 });
 
 
+// Google Search Console OAuth Callback handler for implicit popup flow
+app.get(["/auth/callback", "/auth/callback/"], (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Google Authentication</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          margin: 0;
+          background-color: #f8fafc;
+          color: #334155;
+        }
+        .card {
+          background: white;
+          padding: 2rem;
+          border-radius: 1rem;
+          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+          text-align: center;
+          max-width: 400px;
+        }
+        .spinner {
+          border: 3px solid #f3f3f3;
+          border-top: 3px solid #4f46e5;
+          border-radius: 50%;
+          width: 30px;
+          height: 30px;
+          animation: spin 1s linear infinite;
+          margin: 1rem auto;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h3 style="margin-top:0; color:#1e293b;">Google Authentication</h3>
+        <div class="spinner"></div>
+        <p style="font-size:0.875rem; color:#64748b;">Connecting to Google Search Console... This window will close automatically.</p>
+      </div>
+      <script>
+        const hash = window.location.hash;
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const searchParams = new URLSearchParams(window.location.search);
+        
+        const token = hashParams.get("access_token") || searchParams.get("access_token");
+        const error = searchParams.get("error") || hashParams.get("error");
+        
+        if (window.opener) {
+          if (token) {
+            window.opener.postMessage({ type: "GOOGLE_OAUTH_SUCCESS", token: token }, "*");
+          } else if (error) {
+            window.opener.postMessage({ type: "GOOGLE_OAUTH_FAILURE", error: error }, "*");
+          } else {
+            setTimeout(() => {
+              const retryHash = window.location.hash;
+              const retryParams = new URLSearchParams(retryHash.substring(1));
+              const retryToken = retryParams.get("access_token");
+              if (retryToken) {
+                window.opener.postMessage({ type: "GOOGLE_OAUTH_SUCCESS", token: retryToken }, "*");
+              } else {
+                window.opener.postMessage({ type: "GOOGLE_OAUTH_FAILURE", error: "No token found in callback" }, "*");
+              }
+              window.close();
+            }, 800);
+            return;
+          }
+          window.close();
+        } else {
+          window.location.href = "/";
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+
 // Dev-production hybrid client static serving middleware
 const distPath = path.join(process.cwd(), "dist");
 
