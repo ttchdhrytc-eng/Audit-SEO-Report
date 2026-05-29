@@ -412,36 +412,51 @@ function cleanJsonMarker(text) {
 // HELPER FUNCS: GEMINI REST RAW FETCHER
 // -------------------------------------------------------------
 async function callGeminiDirectly(promptText, apiKey, systemDirective = "") {
-  const model = "gemini-3.5-flash";
-  const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+  let lastError = null;
 
-  const payload = {
-    contents: [
-      {
-        parts: [{ text: promptText }]
+  for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const payload = {
+          contents: [
+            {
+              parts: [{ text: promptText }]
+            }
+          ],
+          config: {}
+        };
+
+        if (systemDirective) {
+          payload.config.systemInstruction = systemDirective;
+        }
+
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Gemini direct query failed with STATUS ${response.status}: ${errText}`);
+        }
+
+        const result = await response.json();
+        const textOutput = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        return textOutput;
+      } catch (err) {
+        lastError = err;
+        console.warn(`[Worker AI] Model ${model} attempt ${attempt} failed:`, err.message || err);
+        if (attempt < 2) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
       }
-    ],
-    config: {}
-  };
-
-  if (systemDirective) {
-    payload.config.systemInstruction = systemDirective;
+    }
   }
 
-  const response = await fetch(requestUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini direct query failed: STATUS ${response.status} - ${errText}`);
-  }
-
-  const result = await response.json();
-  const textOutput = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  return textOutput;
+  throw lastError || new Error("Failed to generate content in worker after all retries");
 }
 
 // -------------------------------------------------------------
