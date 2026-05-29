@@ -19,6 +19,7 @@ import { AiRoadmapPanel } from './components/AiRoadmapPanel';
 import { AiOutreachScriptPanel } from './components/AiOutreachScriptPanel';
 import { GoogleSearchConsolePanel } from './components/GoogleSearchConsolePanel';
 import { PublicReportView } from './components/PublicReportView';
+import { AiKeywordStrategistPanel } from './components/AiKeywordStrategistPanel';
 import { 
   Building2, 
   Search, 
@@ -68,7 +69,7 @@ export default function App() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   // Diagnostic Sub-tabs under scanner
-  const [activeReportSubTab, setActiveReportSubTab] = useState<'summary' | 'technical' | 'onpage' | 'competitors' | 'local' | 'ai-roadmap' | 'outreach' | 'gsc'>('summary');
+  const [activeReportSubTab, setActiveReportSubTab] = useState<'summary' | 'technical' | 'onpage' | 'competitors' | 'keywords' | 'local' | 'ai-roadmap' | 'outreach' | 'gsc'>('summary');
 
   // Bulk Engine Campaign Inputs & Progress
   const [bulkListInput, setBulkListInput] = useState<string>(
@@ -1228,6 +1229,14 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      id="report-keywords-tab"
+                      onClick={() => setActiveReportSubTab('keywords')}
+                      className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition border-b-2 cursor-pointer ${activeReportSubTab === 'keywords' ? 'border-indigo-600 text-indigo-700 font-bold' : 'border-transparent text-slate-552 hover:text-slate-800'}`}
+                    >
+                      🔑 AI Keyword Strategist
+                    </button>
+                    <button
+                      type="button"
                       id="report-local-tab"
                       onClick={() => setActiveReportSubTab('local')}
                       className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition border-b-2 cursor-pointer ${activeReportSubTab === 'local' ? 'border-indigo-600 text-indigo-700 font-bold' : 'border-transparent text-slate-552 hover:text-slate-800'}`}
@@ -1266,6 +1275,7 @@ export default function App() {
                     {activeReportSubTab === 'technical' && <TechnicalSeoPanel report={activeReport} />}
                     {activeReportSubTab === 'onpage' && <OnPageSeoPanel report={activeReport} />}
                     {activeReportSubTab === 'competitors' && <CompetitorGapPanel report={activeReport} />}
+                    {activeReportSubTab === 'keywords' && <AiKeywordStrategistPanel report={activeReport} />}
                     {activeReportSubTab === 'local' && <LocalSeoPanel report={activeReport} />}
                     {activeReportSubTab === 'ai-roadmap' && <AiRoadmapPanel report={activeReport} />}
                     {activeReportSubTab === 'outreach' && <AiOutreachScriptPanel report={activeReport} />}
