@@ -20,8 +20,8 @@ import { AiOutreachScriptPanel } from './components/AiOutreachScriptPanel';
 import { GoogleSearchConsolePanel } from './components/GoogleSearchConsolePanel';
 import { PublicReportView } from './components/PublicReportView';
 import { AiKeywordStrategistPanel } from './components/AiKeywordStrategistPanel';
-import { 
-  Building2, 
+import { getApiUrl } from './utils/api';
+import {   Building2, 
   Search, 
   ListOrdered, 
   Users, 
@@ -103,14 +103,42 @@ export default function App() {
   const [demoWidgetAuditType, setDemoWidgetAuditType] = useState<'Standard' | 'Enterprise' | 'Local'>('Standard');
 
   // White-Label Settings parameters
-  const [whiteLabelSettings, setWhiteLabelSettings] = useState({
-    agencyName: 'SEO SUITE',
-    logoLetter: 'S',
-    headerThemeColor: '#2563eb', // Royal Blue
-    customProposalTitle: 'Client Valuation & Digital Performance Audit',
-    emailTemplate: 'Hello {clientName},\n\nWe recently compiled a professional audit report for {websiteUrl}. It reveals an optimization gap of {deficit}%.\n\nLet me know if you would like to run through the prioritized roadmap together.\n\nBest,\nTeam {agencyName}',
-    supportEmail: 'support@seo-audit-suite.com'
+  const [whiteLabelSettings, setWhiteLabelSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('SEO_SUITE_WHITE_LABEL_SETTINGS');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          agencyName: parsed.agencyName || 'SEO SUITE',
+          logoLetter: parsed.logoLetter || 'S',
+          headerThemeColor: parsed.headerThemeColor || '#2563eb',
+          customProposalTitle: parsed.customProposalTitle || 'Client Valuation & Digital Performance Audit',
+          emailTemplate: parsed.emailTemplate || 'Hello {clientName},\n\nWe recently compiled a professional audit report for {websiteUrl}. It reveals an optimization gap of {deficit}%.\n\nLet me know if you would like to run through the prioritized roadmap together.\n\nBest,\nTeam {agencyName}',
+          supportEmail: parsed.supportEmail || 'support@seo-audit-suite.com',
+          apiBaseUrl: parsed.apiBaseUrl || ''
+        };
+      }
+    } catch (e) {
+      console.warn("Could not load setting overrides:", e);
+    }
+    return {
+      agencyName: 'SEO SUITE',
+      logoLetter: 'S',
+      headerThemeColor: '#2563eb', // Royal Blue
+      customProposalTitle: 'Client Valuation & Digital Performance Audit',
+      emailTemplate: 'Hello {clientName},\n\nWe recently compiled a professional audit report for {websiteUrl}. It reveals an optimization gap of {deficit}%.\n\nLet me know if you would like to run through the prioritized roadmap together.\n\nBest,\nTeam {agencyName}',
+      supportEmail: 'support@seo-audit-suite.com',
+      apiBaseUrl: ''
+    };
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('SEO_SUITE_WHITE_LABEL_SETTINGS', JSON.stringify(whiteLabelSettings));
+    } catch (e) {
+      console.warn("Could not persist setting overrides:", e);
+    }
+  }, [whiteLabelSettings]);
 
   // Standalone public report states
   const [isPublicReportView, setIsPublicReportView] = useState(false);
@@ -152,7 +180,7 @@ export default function App() {
   useEffect(() => {
     if (isPublicReportView && publicReportDomain) {
       setLoadingPublicReport(true);
-      fetch(`/api/audit/${publicReportDomain}`)
+      fetch(getApiUrl(`/api/audit/${publicReportDomain}`))
         .then(res => {
           if (res.ok) return res.json();
           throw new Error("Report details could not be parsed by browser");
@@ -173,7 +201,7 @@ export default function App() {
     if (!selectedAuditId) return;
     const current = scannedAudits.find(aud => aud.domain === selectedAuditId);
     if (current && !current.technical) {
-      fetch(`/api/audit/${selectedAuditId}`)
+      fetch(getApiUrl(`/api/audit/${selectedAuditId}`))
         .then(res => {
           if (res.ok) return res.json();
           throw new Error("Audit has no live representation on server");
@@ -203,7 +231,7 @@ export default function App() {
 
   const fetchAuditedList = async (targetToSelect?: string) => {
     try {
-      const res = await fetch('/api/audited-list');
+      const res = await fetch(getApiUrl('/api/audited-list'));
       const data = await res.json();
       setScannedAudits(data);
       if (targetToSelect) {
@@ -218,7 +246,7 @@ export default function App() {
 
   const fetchLeadsList = async () => {
     try {
-      const res = await fetch('/api/leads');
+      const res = await fetch(getApiUrl('/api/leads'));
       const data = await res.json();
       setCrmLeads(data);
     } catch (e) {
@@ -228,11 +256,11 @@ export default function App() {
 
   const fetchBulkCampaigns = async () => {
     try {
-      const res = await fetch('/api/bulk-jobs');
+      const res = await fetch(getApiUrl('/api/bulk-jobs'));
       const data = await res.json();
       setBulkJobs(data);
       if (data.length > 0 && !selectedJob) {
-        const detailRes = await fetch(`/api/bulk-audit/${data[0].id}`);
+        const detailRes = await fetch(getApiUrl(`/api/bulk-audit/${data[0].id}`));
         const detailData = await detailRes.json();
         setSelectedJob(detailData);
       }
@@ -247,7 +275,7 @@ export default function App() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/bulk-audit/${activeBulkJobId}`);
+        const res = await fetch(getApiUrl(`/api/bulk-audit/${activeBulkJobId}`));
         const data = await res.json();
         
         // Update both list array and selected element
@@ -288,7 +316,7 @@ export default function App() {
     ];
 
     try {
-      const response = await fetch('/api/audit', {
+      const response = await fetch(getApiUrl('/api/audit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -349,7 +377,7 @@ export default function App() {
     
     // 1. Instantly register lead in backend CRM
     try {
-      const leadRes = await fetch('/api/leads', {
+      const leadRes = await fetch(getApiUrl('/api/leads'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -380,7 +408,7 @@ export default function App() {
     if (urls.length === 0) return;
 
     try {
-      const response = await fetch('/api/bulk-audit', {
+      const response = await fetch(getApiUrl('/api/bulk-audit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -405,7 +433,7 @@ export default function App() {
     if (!newLeadForm.email || !newLeadForm.website) return;
 
     try {
-      const res = await fetch('/api/leads', {
+      const res = await fetch(getApiUrl('/api/leads'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -431,7 +459,7 @@ export default function App() {
     if (!selectedLeadId) return;
 
     try {
-      const res = await fetch(`/api/leads/${selectedLeadId}`, {
+      const res = await fetch(getApiUrl(`/api/leads/${selectedLeadId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: statusVal, notes: notesVal })
@@ -447,7 +475,7 @@ export default function App() {
   // Delete a CRM Lead
   const handleDeleteLead = async (id: string) => {
     try {
-      await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+      await fetch(getApiUrl(`/api/leads/${id}`), { method: 'DELETE' });
       setCrmLeads(prev => prev.filter(lead => lead.id !== id));
       if (selectedLeadId === id) setSelectedLeadId(null);
     } catch (err) {
@@ -458,7 +486,7 @@ export default function App() {
   // Fetch specific selected job detail row
   const handleSelectJob = async (id: string) => {
     try {
-      const res = await fetch(`/api/bulk-audit/${id}`);
+      const res = await fetch(getApiUrl(`/api/bulk-audit/${id}`));
       const data = await res.json();
       setSelectedJob(data);
     } catch (err) {
@@ -1643,6 +1671,20 @@ export default function App() {
                         onChange={(e) => setWhiteLabelSettings({ ...whiteLabelSettings, supportEmail: e.target.value })}
                         className="w-full bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs transition"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-850 mb-1.5">API Server Endpoint Override (Optional)</label>
+                      <input 
+                        type="text"
+                        placeholder="E.g., https://your-server-backend.com"
+                        value={whiteLabelSettings.apiBaseUrl || ''}
+                        onChange={(e) => setWhiteLabelSettings({ ...whiteLabelSettings, apiBaseUrl: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 focus:outline-none focus:bg-white focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs transition font-mono border-dashed"
+                      />
+                      <span className="block text-[10px] text-slate-400 mt-1 leading-normal">
+                        Configure this when deploying a standalone headless client (e.g. on Cloudflare Workers/Pages) pointing requests to your Node VPS or Cloud Run API. Leave empty for dynamic relative paths.
+                      </span>
                     </div>
                   </div>
 

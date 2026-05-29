@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { WebsiteAuditReport } from '../types';
+import { getApiUrl } from '../utils/api';
 import { 
   Search, 
   Sparkles, 
@@ -77,7 +78,7 @@ export const AiKeywordStrategistPanel: React.FC<AiKeywordStrategistPanelProps> =
     const targetSeed = seedInput.trim() || `${report.companyName} seo optimization`;
 
     try {
-      const response = await fetch('/api/keyword-strategist', {
+      const response = await fetch(getApiUrl('/api/keyword-strategist'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,7 +108,7 @@ export const AiKeywordStrategistPanel: React.FC<AiKeywordStrategistPanelProps> =
     setOutlineData(null);
 
     try {
-      const response = await fetch('/api/keyword-strategist/outline', {
+      const response = await fetch(getApiUrl('/api/keyword-strategist/outline'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

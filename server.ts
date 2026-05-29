@@ -15,6 +15,18 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Enable CORS for custom deployments (like Cloudflare Workers / Pages)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
+
 // Initialize Gemini API client safely with the recommended pattern
 let ai: GoogleGenAI | null = null;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyAdOW9_k8okc1Q1meAyDzfuWR9rfFry-qo";
