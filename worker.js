@@ -424,12 +424,13 @@ async function callGeminiDirectly(promptText, apiKey, systemDirective = "") {
             {
               parts: [{ text: promptText }]
             }
-          ],
-          config: {}
+          ]
         };
 
         if (systemDirective) {
-          payload.config.systemInstruction = systemDirective;
+          payload.systemInstruction = {
+            parts: [{ text: systemDirective }]
+          };
         }
 
         const response = await fetch(requestUrl, {
