@@ -855,9 +855,9 @@ app.post("/api/audit", async (req, res) => {
         const psiUrl = `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetForPsi)}&category=performance&category=seo&key=${PAGESPEED_API_KEY}`;
         console.log(`Calling Google PageSpeed Insights API for root url: ${targetForPsi}`);
 
-        // 35 second response limit for speed
+        // 5 second response limit for speed to prevent gateway timeouts
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 35000);
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const psiResponse = await fetch(psiUrl, { signal: controller.signal });
         clearTimeout(timeoutId);
 

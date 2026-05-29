@@ -65,6 +65,7 @@ export default function App() {
   const [scanUrl, setScanUrl] = useState<string>('');
   const [scanCompanyName, setScanCompanyName] = useState<string>('');
   const [scanAuditType, setScanAuditType] = useState<'Standard' | 'Enterprise' | 'Local'>('Standard');
+  const [scanError, setScanError] = useState<string | null>(null);
 
   // Diagnostic Sub-tabs under scanner
   const [activeReportSubTab, setActiveReportSubTab] = useState<'summary' | 'technical' | 'onpage' | 'competitors' | 'local' | 'ai-roadmap' | 'outreach' | 'gsc'>('summary');
@@ -275,6 +276,7 @@ export default function App() {
     setIsScanning(true);
     setScanProgress(5);
     setScanStep('Initializing crawl spiders...');
+    setScanError(null);
 
     // Fake visual ticker for granular feedback
     const timers = [
@@ -295,9 +297,19 @@ export default function App() {
         })
       });
       
+      timers.forEach(t => clearTimeout(t));
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson?.error || `Server responded with status ${response.status} (${response.statusText || 'Unknown Connection Issue'})`);
+      }
+      
       const finishedReport = await response.json();
       
-      timers.forEach(t => clearTimeout(t));
+      if (!finishedReport || finishedReport.error || !finishedReport.domain) {
+        throw new Error(finishedReport?.error || 'Completed audit returned invalid dataset details');
+      }
+      
       setScanProgress(100);
       setScanStep('Report fully built!');
       
@@ -319,8 +331,10 @@ export default function App() {
         setActiveReportSubTab('summary');
       }, 500);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Crawl process errored out", err);
+      timers.forEach(t => clearTimeout(t));
+      setScanError(err?.message || "An unexpected network error occurred while crawling target website.");
       setIsScanning(false);
     }
   };
@@ -1155,6 +1169,25 @@ export default function App() {
                   </button>
                 </form>
               </div>
+
+              {scanError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 px-5 py-4 rounded-2xl flex items-start justify-between font-medium text-xs shadow-xs no-print gap-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="font-bold block text-rose-950 mb-0.5">Scan Processing Error</strong>
+                      <span className="text-rose-700 font-mono text-[11px] font-medium leading-relaxed">{scanError}</span>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setScanError(null)}
+                    className="text-rose-450 hover:text-rose-600 font-bold cursor-pointer text-lg px-2 shrink-0 select-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
 
               {/* Reports view workspace */}
               {activeReport ? (
