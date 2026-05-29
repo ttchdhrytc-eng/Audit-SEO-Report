@@ -1,0 +1,6 @@
+{
+  "name": "SEO Audit Suite",
+  "description": "Professional SaaS Agency SEO Audit & Campaign Manager with real-time analysis, competitor intelligence, and AI-driven agency recommendations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
