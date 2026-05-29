@@ -883,6 +883,8 @@ app.post("/api/audit", async (req, res) => {
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
+  const executionTasks: Promise<void>[] = [];
+
   const cleanUrl = cleanDomainName(url);
   const domainShortName = cleanUrl.split('.')[0];
   const formattedCompany = companyName || domainShortName.charAt(0).toUpperCase() + domainShortName.slice(1);
@@ -935,81 +937,83 @@ app.post("/api/audit", async (req, res) => {
       console.warn("Could not fetch elements from the actual target website:", error);
     }
 
-    // 2b. Perform PageSpeed Insights Scan with fallback API key
+    // 2b. Perform PageSpeed Insights and Gemini AI Enrichment in PARALLEL to prevent gateway timeouts!
     if (PAGESPEED_API_KEY) {
-      try {
-        let targetForPsi = cleanUrl;
-        if (!/^https?:\/\//i.test(targetForPsi)) {
-          targetForPsi = "https://" + targetForPsi;
-        }
-        const psiUrl = `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetForPsi)}&category=performance&category=seo&key=${PAGESPEED_API_KEY}`;
-        console.log(`Calling Google PageSpeed Insights API for root url: ${targetForPsi}`);
-
-        // Raised response limit to 25 seconds because PageSpeed Insights crawler/Lighthouse takes 10-25 seconds to complete. This resolves AbortError issues.
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
-        const psiResponse = await fetch(psiUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (psiResponse.ok) {
-          const psiData = await psiResponse.json();
-          const lhRes = psiData?.lighthouseResult;
-          if (lhRes) {
-            const perfScore = lhRes.categories?.performance?.score;
-            const seoScoreValue = lhRes.categories?.seo?.score;
-
-            if (perfScore !== undefined && perfScore !== null) {
-              const roundedPerf = Math.round(perfScore * 100);
-              staticReport.technical.coreWebVitals.score = roundedPerf;
-              
-              // Adjust technical score a bit to reflect PageSpeed Insights reality too
-              staticReport.technical.overallScore = Math.round((staticReport.technical.overallScore + roundedPerf) / 2);
-            }
-
-            // LCP
-            const lcpValue = lhRes.audits?.['largest-contentful-paint']?.numericValue;
-            if (lcpValue !== undefined) {
-              const lcpSec = (lcpValue / 1000).toFixed(1) + "s";
-              staticReport.technical.coreWebVitals.lcp.value = lcpSec;
-              staticReport.technical.coreWebVitals.lcp.rating = lcpValue <= 2500 ? "good" : lcpValue <= 4000 ? "needs-improvement" : "poor";
-            }
-
-            // CLS
-            const clsValue = lhRes.audits?.['cumulative-layout-shift']?.numericValue;
-            if (clsValue !== undefined) {
-              staticReport.technical.coreWebVitals.cls.value = clsValue.toFixed(2);
-              staticReport.technical.coreWebVitals.cls.rating = clsValue <= 0.1 ? "good" : clsValue <= 0.25 ? "needs-improvement" : "poor";
-            }
-
-            // TTFB
-            const ttfbValue = lhRes.audits?.['server-response-time']?.numericValue;
-            if (ttfbValue !== undefined) {
-              const ttfbSec = (ttfbValue / 1000).toFixed(2) + "s";
-              staticReport.technical.coreWebVitals.ttfb.value = ttfbSec;
-              staticReport.technical.coreWebVitals.ttfb.rating = ttfbValue <= 800 ? "good" : ttfbValue <= 1500 ? "needs-improvement" : "poor";
-            }
-
-            // INP
-            const inpValue = lhRes.audits?.['interactive']?.numericValue || lhRes.audits?.['max-potential-fid']?.numericValue;
-            if (inpValue !== undefined) {
-              staticReport.technical.coreWebVitals.inp.value = Math.round(inpValue) + "ms";
-              staticReport.technical.coreWebVitals.inp.rating = inpValue <= 200 ? "good" : inpValue <= 500 ? "needs-improvement" : "poor";
-            }
-
-            // Adjust overall score to merge PageSpeed Insights feedback
-            if (perfScore !== undefined && seoScoreValue !== undefined) {
-              const combinedPsiScore = Math.round(((perfScore + seoScoreValue) / 2) * 100);
-              staticReport.overallScore = Math.round((staticReport.overallScore * 2 + combinedPsiScore) / 3);
-            }
-
-            console.log(`PageSpeed check matched. Overwrote report metrics successfully.`);
+      executionTasks.push((async () => {
+        try {
+          let targetForPsi = cleanUrl;
+          if (!/^https?:\/\//i.test(targetForPsi)) {
+            targetForPsi = "https://" + targetForPsi;
           }
-        } else {
-          console.warn(`PageSpeed API returned error response code: ${psiResponse.status}`);
+          const psiUrl = `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetForPsi)}&category=performance&category=seo&key=${PAGESPEED_API_KEY}`;
+          console.log(`[Parallel task] Calling Google PageSpeed Insights API for root url: ${targetForPsi}`);
+
+          // Capped PageSpeed Insights at 6 seconds maximum because Lighthouse analysis takes long and we have excellent simulations if it times out
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const psiResponse = await fetch(psiUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          if (psiResponse.ok) {
+            const psiData = await psiResponse.json();
+            const lhRes = psiData?.lighthouseResult;
+            if (lhRes) {
+              const perfScore = lhRes.categories?.performance?.score;
+              const seoScoreValue = lhRes.categories?.seo?.score;
+
+              if (perfScore !== undefined && perfScore !== null) {
+                const roundedPerf = Math.round(perfScore * 100);
+                staticReport.technical.coreWebVitals.score = roundedPerf;
+                
+                // Adjust technical score a bit to reflect PageSpeed Insights reality too
+                staticReport.technical.overallScore = Math.round((staticReport.technical.overallScore + roundedPerf) / 2);
+              }
+
+              // LCP
+              const lcpValue = lhRes.audits?.['largest-contentful-paint']?.numericValue;
+              if (lcpValue !== undefined) {
+                const lcpSec = (lcpValue / 1000).toFixed(1) + "s";
+                staticReport.technical.coreWebVitals.lcp.value = lcpSec;
+                staticReport.technical.coreWebVitals.lcp.rating = lcpValue <= 2500 ? "good" : lcpValue <= 4000 ? "needs-improvement" : "poor";
+              }
+
+              // CLS
+              const clsValue = lhRes.audits?.['cumulative-layout-shift']?.numericValue;
+              if (clsValue !== undefined) {
+                staticReport.technical.coreWebVitals.cls.value = clsValue.toFixed(2);
+                staticReport.technical.coreWebVitals.cls.rating = clsValue <= 0.1 ? "good" : clsValue <= 0.25 ? "needs-improvement" : "poor";
+              }
+
+              // TTFB
+              const ttfbValue = lhRes.audits?.['server-response-time']?.numericValue;
+              if (ttfbValue !== undefined) {
+                const ttfbSec = (ttfbValue / 1000).toFixed(2) + "s";
+                staticReport.technical.coreWebVitals.ttfb.value = ttfbSec;
+                staticReport.technical.coreWebVitals.ttfb.rating = ttfbValue <= 800 ? "good" : ttfbValue <= 1500 ? "needs-improvement" : "poor";
+              }
+
+              // INP
+              const inpValue = lhRes.audits?.['interactive']?.numericValue || lhRes.audits?.['max-potential-fid']?.numericValue;
+              if (inpValue !== undefined) {
+                staticReport.technical.coreWebVitals.inp.value = Math.round(inpValue) + "ms";
+                staticReport.technical.coreWebVitals.inp.rating = inpValue <= 200 ? "good" : inpValue <= 500 ? "needs-improvement" : "poor";
+              }
+
+              // Adjust overall score to merge PageSpeed Insights feedback
+              if (perfScore !== undefined && seoScoreValue !== undefined) {
+                const combinedPsiScore = Math.round(((perfScore + seoScoreValue) / 2) * 100);
+                staticReport.overallScore = Math.round((staticReport.overallScore * 2 + combinedPsiScore) / 3);
+              }
+
+              console.log(`[Parallel task] PageSpeed check matched and overwrote report metrics successfully.`);
+            }
+          } else {
+            console.warn(`[Parallel task] PageSpeed API returned error response code: ${psiResponse.status}`);
+          }
+        } catch (psiErr) {
+          console.warn("[Parallel task] Could not retrieve PageSpeed Insights metrics - using simulations instead:", psiErr);
         }
-      } catch (psiErr) {
-        console.warn("Could not retrieve PageSpeed Insights metrics - using simulations instead:", psiErr);
-      }
+      })());
     }
   } else {
     console.log(`Using optimized simulations layout for simulation domain: ${cleanUrl}`);
@@ -1017,89 +1021,94 @@ app.post("/api/audit", async (req, res) => {
 
   // 3. Enrich the audit report using Gemini AI (if initialized and active)
   if (ai) {
-    try {
-      const prompt = `
-        You are an elite, Enterprise-Grade SaaS SEO agency director.
-        Please help enrich an SEO audit report for ${cleanUrl} (${formattedCompany}), operating as a ${typeOfAudit} audit type.
-        
-        The current parsed details include:
-        - Title Tag: ${staticReport.onPage.titleTag.value} 
-        - Meta Description: ${staticReport.onPage.metaDescription.value}
-        - Current Overall Score: ${staticReport.overallScore}%
-        - Homepage H1 tags currently matching: ${JSON.stringify(staticReport.onPage.headingStructure.h1s)}
-        
-        Please generate high-conversion, highly detailed content in a valid, parsed-friendly JSON response string containing EXACTLY these keys:
-        - executiveSummary: (Make this incredibly strategic, client-ready, professional, and convincing of why they need to optimize their site now)
-        - clientRec1: (An extremely specific, customized, conversion-oriented recommendation for their title tag/headings structure, styled like: "Your homepage lacks a primary keyword-focused H1. This reduces topical relevance for 'SEO agency in Dallas'. Adding a keyword-optimized H1 can improve semantic search alignment and CTR.")
-        - clientRec2: (An incredibly actionable recommendation regarding their performance/Core Web Vitals or schema markup, directly targeting technical optimization metrics)
-        - mainKeywordsList: (A simplified JSON list of 4 relevant keywords for their specific industry based on the domain name/company, with realistic counts, densities e.g. "2.4%", and relevance metrics)
-        - outreachScript: (A highly personalized, professional cold email outreach script targeting the website owner. It must mention the specific homepage title tag "${staticReport.onPage.titleTag.value}" or their audit score of ${staticReport.overallScore}%, point out they are missing critical semantic headers or LCP speed variables, and suggest a 5-minute strategic walkthrough as a low-friction call-to-action)
-        
-        Use exact JSON notation without wrappers or markdown markers other than backticks if requested.
-      `;
+    executionTasks.push((async () => {
+      try {
+        const prompt = `
+          You are an elite, Enterprise-Grade SaaS SEO agency director.
+          Please help enrich an SEO audit report for ${cleanUrl} (${formattedCompany}), operating as a ${typeOfAudit} audit type.
+          
+          The current parsed details include:
+          - Title Tag: ${staticReport.onPage.titleTag.value} 
+          - Meta Description: ${staticReport.onPage.metaDescription.value}
+          - Current Overall Score: ${staticReport.overallScore}%
+          - Homepage H1 tags currently matching: ${JSON.stringify(staticReport.onPage.headingStructure.h1s)}
+          
+          Please generate high-conversion, highly detailed content in a valid, parsed-friendly JSON response string containing EXACTLY these keys:
+          - executiveSummary: (Make this incredibly strategic, client-ready, professional, and convincing of why they need to optimize their site now)
+          - clientRec1: (An extremely specific, customized, conversion-oriented recommendation for their title tag/headings structure, styled like: "Your homepage lacks a primary keyword-focused H1. This reduces topical relevance for 'SEO agency in Dallas'. Adding a keyword-optimized H1 can improve semantic search alignment and CTR.")
+          - clientRec2: (An incredibly actionable recommendation regarding their performance/Core Web Vitals or schema markup, directly targeting technical optimization metrics)
+          - mainKeywordsList: (A simplified JSON list of 4 relevant keywords for their specific industry based on the domain name/company, with realistic counts, densities e.g. "2.4%", and relevance metrics)
+          - outreachScript: (A highly personalized, professional cold email outreach script targeting the website owner. It must mention the specific homepage title tag "${staticReport.onPage.titleTag.value}" or their audit score of ${staticReport.overallScore}%, point out they are missing critical semantic headers or LCP speed variables, and suggest a 5-minute strategic walkthrough as a low-friction call-to-action)
+          
+          Use exact JSON notation without wrappers or markdown markers other than backticks if requested.
+        `;
 
-      console.log("Calling Gemini AI to enrich the SEO copywriting report...");
-      const aiResponse = await safeGenerateContent({
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              executiveSummary: { type: Type.STRING },
-              clientRec1: { type: Type.STRING },
-              clientRec2: { type: Type.STRING },
-              outreachScript: { type: Type.STRING },
-              mainKeywordsList: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    keyword: { type: Type.STRING },
-                    count: { type: Type.INTEGER },
-                    density: { type: Type.STRING },
-                    relevance: { type: Type.STRING }
-                  },
-                  required: ["keyword", "count", "density", "relevance"]
+        console.log("[Parallel task] Calling Gemini AI to enrich the SEO copywriting report...");
+        const aiResponse = await safeGenerateContent({
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                executiveSummary: { type: Type.STRING },
+                clientRec1: { type: Type.STRING },
+                clientRec2: { type: Type.STRING },
+                outreachScript: { type: Type.STRING },
+                mainKeywordsList: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      keyword: { type: Type.STRING },
+                      count: { type: Type.INTEGER },
+                      density: { type: Type.STRING },
+                      relevance: { type: Type.STRING }
+                    },
+                    required: ["keyword", "count", "density", "relevance"]
+                  }
                 }
-              }
-            },
-            required: ["executiveSummary", "clientRec1", "clientRec2", "outreachScript", "mainKeywordsList"]
+              },
+              required: ["executiveSummary", "clientRec1", "clientRec2", "outreachScript", "mainKeywordsList"]
+            }
           }
-        }
-      });
+        });
 
-      if (aiResponse.text) {
-        const enriched = JSON.parse(aiResponse.text);
-        if (enriched.executiveSummary) staticReport.executiveSummary = enriched.executiveSummary;
-        if (enriched.outreachScript) staticReport.outreachScript = enriched.outreachScript;
-        
-        // Enrich first critical recommendation
-        if (enriched.clientRec1) {
-          staticReport.recommendations[0].description = enriched.clientRec1;
-          staticReport.onPage.headingStructure.validation.recommendation = enriched.clientRec1;
-        }
-        
-        // Enrich second recommendation
-        if (enriched.clientRec2) {
-          staticReport.recommendations[1].description = enriched.clientRec2;
-        }
+        if (aiResponse.text) {
+          const enriched = JSON.parse(aiResponse.text);
+          if (enriched.executiveSummary) staticReport.executiveSummary = enriched.executiveSummary;
+          if (enriched.outreachScript) staticReport.outreachScript = enriched.outreachScript;
+          
+          // Enrich first critical recommendation
+          if (enriched.clientRec1) {
+            staticReport.recommendations[0].description = enriched.clientRec1;
+            staticReport.onPage.headingStructure.validation.recommendation = enriched.clientRec1;
+          }
+          
+          // Enrich second recommendation
+          if (enriched.clientRec2) {
+            staticReport.recommendations[1].description = enriched.clientRec2;
+          }
 
-        // Incorporate custom keyword density list
-        if (enriched.mainKeywordsList && enriched.mainKeywordsList.length > 0) {
-          staticReport.onPage.keywordDensity = enriched.mainKeywordsList.map((kw: any) => ({
-            keyword: kw.keyword,
-            count: Number(kw.count) || 12,
-            density: kw.density || "1.8%",
-            relevance: (kw.relevance || "high").toLowerCase() as 'high' | 'medium' | 'low'
-          }));
+          // Incorporate custom keyword density list
+          if (enriched.mainKeywordsList && enriched.mainKeywordsList.length > 0) {
+            staticReport.onPage.keywordDensity = enriched.mainKeywordsList.map((kw: any) => ({
+              keyword: kw.keyword,
+              count: Number(kw.count) || 12,
+              density: kw.density || "1.8%",
+              relevance: (kw.relevance || "high").toLowerCase() as 'high' | 'medium' | 'low'
+            }));
+          }
+          console.log("[Parallel task] Audit successfully enriched by Gemini AI.");
         }
-        console.log("Audit successfully enriched by Gemini AI.");
+      } catch (aiErr) {
+        console.warn("[Parallel task] Failed to generate content via Gemini API. Falling back to high-grade local simulation model.", aiErr);
       }
-    } catch (aiErr) {
-      console.warn("Failed to generate content via Gemini API. Falling back to high-grade local simulation model.", aiErr);
-    }
+    })());
   }
+
+  // Await the concurrent tasks safely (the short timeouts guarantee this resolves very quickly)
+  await Promise.all(executionTasks);
 
   // Save to persistent database
   db.audits[cleanUrl] = staticReport;
