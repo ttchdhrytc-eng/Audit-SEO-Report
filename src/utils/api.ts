@@ -21,21 +21,28 @@ export function getApiUrl(path: string): string {
     return `${cleanBase}/${cleanPath}`;
   }
 
-  // Smart Fallback: If running on an external domain (e.g. Cloudflare Workers, GitHub Pages),
-  // automatically route traffic to the live Google Cloud Run sandbox container.
+  // Smart Fallback: Ensure all sandboxed iframe views (Google Preview environments)
+  // and Shared App preview pages route their API calls back to our active writeable
+  // live development container backend to align database state and prevent fetch errors.
   if (typeof window !== "undefined" && window.location) {
     const hostname = window.location.hostname;
     const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
-    const isContainer = hostname.endsWith("run.app");
-    const isGooglePreview = hostname.includes("google") || hostname.includes("applet") || hostname.includes("preview");
+    const devBackend = "https://ais-dev-jh73tlf3ma53ancchisqut-234509423251.asia-southeast1.run.app";
     
-    if (isLocal || isContainer || isGooglePreview) {
+    // Local dev mode uses relative endpoints
+    if (isLocal) {
       return path;
     }
 
-    const defaultBackend = "https://ais-pre-jh73tlf3ma53ancchisqut-234509423251.asia-southeast1.run.app";
+    // Browsing the dev server directly uses relative endpoints
+    if (hostname === "ais-dev-jh73tlf3ma53ancchisqut-234509423251.asia-southeast1.run.app") {
+      return path;
+    }
+
+    // For any preview or shared/outer domains (such as Google iframe sandboxes, 
+    // the Shared App container, or external worker previews), route to devBackend
     const cleanPath = path.replace(/^\/+/, '');
-    return `${defaultBackend}/${cleanPath}`;
+    return `${devBackend}/${cleanPath}`;
   }
 
   return path;
