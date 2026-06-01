@@ -4,15 +4,183 @@
  * Handles scraping, PageSpeed API, Gemini AI recommendation audits, Google Search Console, and D1 storage.
  */
 
+function isPrivateIp(ip) {
+  const cleanIp = ip.replace(/^\[|\]$/g, '').trim();
+
+  // IPv6 Loopback
+  if (cleanIp === '::1' || cleanIp === '0:0:0:0:0:0:0:1') {
+    return true;
+  }
+
+  // IPv6 Private & Local Link Ranges
+  const cleanIpLower = cleanIp.toLowerCase();
+  if (
+    cleanIpLower.startsWith('fc00:') || 
+    cleanIpLower.startsWith('fd00:') || 
+    cleanIpLower.startsWith('fe80:')
+  ) {
+    return true;
+  }
+
+  // IPv4 check
+  const ipv4Pattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const match = cleanIp.match(ipv4Pattern);
+  if (match) {
+    const p1 = parseInt(match[1], 10);
+    const p2 = parseInt(match[2], 10);
+    const p3 = parseInt(match[3], 10);
+    const p4 = parseInt(match[4], 10);
+
+    if (p1 > 255 || p2 > 255 || p3 > 255 || p4 > 255) {
+      return true; // Malformed/unsafe
+    }
+
+    // localhost / loopback: 127.0.0.0/8
+    if (p1 === 127) return true;
+
+    // 10.0.0.0/8
+    if (p1 === 10) return true;
+
+    // 172.16.0.0/12
+    if (p1 === 172 && (p2 >= 16 && p2 <= 31)) return true;
+
+    // 192.168.0.0/16
+    if (p1 === 192 && p2 === 168) return true;
+
+    // 169.254.0.0/16
+    if (p1 === 169 && p2 === 254) return true;
+
+    // 0.0.0.0/8
+    if (p1 === 0) return true;
+  }
+
+  return false;
+}
+
+function isLocalhostOrLoopbackHostname(hostname) {
+  const h = hostname.toLowerCase().trim();
+  if (h === 'localhost' || h === 'localhost.localdomain' || h.endsWith('.localhost')) {
+    return true;
+  }
+  return false;
+}
+
+async function validateUrlAndResolveSafe(urlStr) {
+  try {
+    let target = urlStr.trim();
+    if (!/^https?:\/\//i.test(target)) {
+      target = "https://" + target;
+    }
+
+    const parsed = new URL(target);
+    const protocol = parsed.protocol.toLowerCase();
+    
+    if (protocol !== 'http:' && protocol !== 'https:') {
+      return { safe: false, error: "Only http and https protocols are permitted." };
+    }
+
+    const hostname = parsed.hostname;
+
+    if (isLocalhostOrLoopbackHostname(hostname)) {
+      return { safe: false, error: "Access to localhost or loopback domains is forbidden." };
+    }
+
+    // Check if the hostname is an IP directly
+    if (isPrivateIp(hostname)) {
+      return { safe: false, error: "Access to private IP addresses is forbidden." };
+    }
+
+    // Perform DNS lookup using Cloudflare DNS over HTTPS API
+    let ip = null;
+    try {
+      const dohUrl = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=A`;
+      const res = await fetch(dohUrl, {
+        headers: { "Accept": "application/json" }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.Answer && json.Answer.length > 0) {
+          const firstA = json.Answer.find(ans => ans.type === 1);
+          if (firstA) {
+            ip = firstA.data;
+          }
+        }
+      }
+    } catch (dohErr) {
+      console.warn("Cloudflare DoH failed, trying Google DNS:", dohErr);
+    }
+
+    // Fallback to Google DNS if Cloudflare fails or didn't resolve
+    if (!ip) {
+      try {
+        const dohUrl = `https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=A`;
+        const res = await fetch(dohUrl);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.Answer && json.Answer.length > 0) {
+            const firstA = json.Answer.find(ans => ans.type === 1);
+            if (firstA) {
+              ip = firstA.data;
+            }
+          }
+        }
+      } catch (googleDohErr) {
+        console.warn("Google DoH resolution failed:", googleDohErr);
+      }
+    }
+
+    if (!ip) {
+      return { safe: false, error: "DNS resolution failed." };
+    }
+
+    if (isPrivateIp(ip)) {
+      return { safe: false, error: "Access to private IP space is forbidden." };
+    }
+
+    return { safe: true, url: target, ip };
+  } catch (err) {
+    return { safe: false, error: `Invalid URL: ${err.message || err}` };
+  }
+}
+
+function auditLog(request, payload, endpoint, action, description) {
+  const timestamp = new Date().toISOString();
+  const userName = payload?.sub || "anonymous_user";
+  const userRole = payload?.role || "no_role";
+  const ipAddress = request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || "unknown_ip";
+  console.log(
+    `[CRM-AUDIT-LOG] [${timestamp}] Principal: "${userName}" (Role: ${userRole}) | Action: "${action}" | Endpoint: "${endpoint}" | Context: "${description}" | Source IP: ${ipAddress}`
+  );
+}
+
 export default {
   async fetch(request, env, ctx) {
-    // 1. CORS Preflight & Base Header Handling
+    // 1. CORS Preflight & Base Header Handling using a whitelist-based CORS policy
+    const allowedOrigins = (env.ALLOWED_ORIGINS || "")
+      .split(",")
+      .map(o => o.trim())
+      .filter(Boolean);
+
+    const origin = request.headers.get("origin") || request.headers.get("Origin");
+
     const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, X-GSC-Token",
       "Access-Control-Max-Age": "86400",
     };
+
+    if (origin) {
+      if (allowedOrigins.includes(origin)) {
+        corsHeaders["Access-Control-Allow-Origin"] = origin;
+      } else {
+        return new Response(JSON.stringify({ error: "Forbidden: Origin not whitelisted by CORS policy." }), {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
+      }
+    }
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders, status: 204 });
@@ -23,6 +191,37 @@ export default {
       const path = url.pathname;
 
       // 2. Routing System
+      // ----------------- ADMIN LOGIN ENDPOINT -----------------
+      if (path === "/api/login" && request.method === "POST") {
+        const body = await request.json();
+        const password = body.password;
+        if (!password) {
+          return jsonResponse({ error: "Password is required" }, corsHeaders, 400);
+        }
+        const adminPassword = env.ADMIN_PASSWORD;
+        if (!adminPassword) {
+          throw new Error("ADMIN_PASSWORD environment variable/binding is required");
+        }
+        const userPassword = env.USER_PASSWORD || "user123";
+
+        const jwtSecret = env.JWT_SECRET;
+        if (!jwtSecret) {
+          throw new Error("JWT_SECRET environment variable/binding is required");
+        }
+
+        const exp = Math.floor(Date.now() / 1000) + 86400;
+
+        if (password === adminPassword) {
+          const token = await signJwt({ role: "admin", sub: "admin_user", exp }, jwtSecret);
+          return jsonResponse({ token, role: "admin" }, corsHeaders);
+        } else if (password === userPassword) {
+          const token = await signJwt({ role: "user", sub: "staff_user", exp }, jwtSecret);
+          return jsonResponse({ token, role: "user" }, corsHeaders);
+        } else {
+          return jsonResponse({ error: "Invalid password" }, corsHeaders, 401);
+        }
+      }
+
       // ----------------- ROOT / HEALTH CHECK -----------------
       if (path === "/" || path === "/api/health") {
         return jsonResponse({ status: "online", service: "Revenue Clutch Audit Engine", version: "2.1.0" }, corsHeaders);
@@ -43,6 +242,11 @@ export default {
         cleanDomain = cleanDomain.split("/")[0];
 
         // Perform the full crawl and audit stream
+        const safetyCheck = await validateUrlAndResolveSafe(cleanDomain);
+        if (!safetyCheck.safe) {
+          return jsonResponse({ error: `Rejected unsafe URL: ${safetyCheck.error}` }, corsHeaders, 400);
+        }
+
         const report = await runFullAudit(cleanDomain, companyName || cleanDomain, auditType, env);
 
         // Save report to D1 Database if it exists
@@ -74,6 +278,11 @@ export default {
         let cleanDomain = domainParam.trim().toLowerCase();
         cleanDomain = cleanDomain.replace(/^(https?:\/\/)?(www\.)?/, "");
         cleanDomain = cleanDomain.split("/")[0];
+
+        const safetyCheck = await validateUrlAndResolveSafe(cleanDomain);
+        if (!safetyCheck.safe) {
+          return jsonResponse({ error: `Rejected unsafe URL: ${safetyCheck.error}` }, corsHeaders, 400);
+        }
 
         if (env.DB) {
           const row = await env.DB.prepare(
@@ -115,6 +324,10 @@ export default {
       // ----------------- GET/CREATE CRM LEADS -----------------
       if (path === "/api/leads") {
         if (request.method === "POST") {
+          const payload = await checkAuth(request, env);
+          if (!payload) {
+            return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
+          }
           const leadData = await request.json();
           const leadId = crypto.randomUUID();
           const dateNow = new Date().toISOString();
@@ -136,13 +349,29 @@ export default {
             ).run();
           }
 
-          return jsonResponse({ success: true, id: leadId }, corsHeaders);
+          auditLog(request, payload, "POST /api/leads", "CREATE_LEAD", `Inserting new CRM registry: ${leadData.name || 'Anonymous'} (${leadData.email || 'N/A'})`);
+          return jsonResponse({
+            id: leadId,
+            name: leadData.name || "Anonymous Lead",
+            email: leadData.email || "",
+            website: leadData.website || "",
+            company: leadData.company || "",
+            phone: leadData.phone || "",
+            status: leadData.status || "New",
+            notes: leadData.notes || "",
+            dateCaptured: dateNow
+          }, corsHeaders);
         }
 
         if (request.method === "GET") {
+          const payload = await checkAuth(request, env);
+          if (!payload) {
+            return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
+          }
+          let list = [];
           if (env.DB) {
             const { results } = await env.DB.prepare("SELECT * FROM leads ORDER BY created_at DESC").all();
-            const list = results.map(row => ({
+            list = results.map(row => ({
               id: row.id,
               name: row.name,
               email: row.email,
@@ -153,20 +382,82 @@ export default {
               notes: row.notes,
               dateCaptured: row.created_at
             }));
-            return jsonResponse(list, corsHeaders);
           }
-          return jsonResponse([], corsHeaders);
+          auditLog(request, payload, "GET /api/leads", "READ_ALL_LEADS", `Exposing complete CRM database list. Record count: ${list.length}`);
+          return jsonResponse(list, corsHeaders);
         }
+      }
+
+      // ----------------- EXPORT CRM LEADS (CSV) -----------------
+      if (path === "/api/leads/export" && request.method === "GET") {
+        const payload = await checkAuth(request, env);
+        if (!payload) {
+          return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
+        }
+        if (payload.role !== "admin") {
+          return jsonResponse({ error: "Forbidden: This action requires the admin role" }, corsHeaders, 403);
+        }
+
+        let list = [];
+        if (env.DB) {
+          const { results } = await env.DB.prepare("SELECT * FROM leads ORDER BY created_at DESC").all();
+          list = results.map(row => ({
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            website: row.website,
+            company: row.company,
+            phone: row.phone,
+            status: row.status,
+            notes: row.notes,
+            dateCaptured: row.created_at
+          }));
+        }
+
+        auditLog(request, payload, "GET /api/leads/export", "EXPORT_ALL_LEADS", `Generating worker CSV export for leads. Count: ${list.length}`);
+
+        let csv = "ID,Name,Email,Website,Phone,Company,Overall Score,Status,Date Captured,Notes\n";
+        for (const lead of list) {
+          const safeId = (lead.id || "").replace(/"/g, '""');
+          const safeName = (lead.name || "").replace(/"/g, '""');
+          const safeEmail = (lead.email || "").replace(/"/g, '""');
+          const safeWebsite = (lead.website || "").replace(/"/g, '""');
+          const safePhone = (lead.phone || "").replace(/"/g, '""');
+          const safeCompany = (lead.company || "").replace(/"/g, '""');
+          const safeScore = lead.overallScore || "";
+          const safeStatus = (lead.status || "").replace(/"/g, '""');
+          const safeDate = (lead.dateCaptured || "").replace(/"/g, '""');
+          const safeNotes = (lead.notes || "").replace(/"/g, '""');
+          
+          csv += `"${safeId}","${safeName}","${safeEmail}","${safeWebsite}","${safePhone}","${safeCompany}","${safeScore}","${safeStatus}","${safeDate}","${safeNotes}"\n`;
+        }
+
+        return new Response(csv, {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename=leads-export-${Date.now()}.csv`
+          }
+        });
       }
 
       // ----------------- UPDATE/DELETE LEADS -----------------
       if (path.startsWith("/api/leads/") && (request.method === "PUT" || request.method === "DELETE")) {
+        const payload = await checkAuth(request, env);
+        if (!payload) {
+          return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
+        }
+        if (payload.role !== "admin") {
+          return jsonResponse({ error: "Forbidden: This action requires the admin role" }, corsHeaders, 403);
+        }
         const leadId = path.split("/")[3];
         if (!leadId) {
           return jsonResponse({ error: "Missing lead identifier" }, corsHeaders, 400);
         }
 
         if (request.method === "DELETE") {
+          auditLog(request, payload, `DELETE /api/leads/${leadId}`, "DELETE_LEAD", `Permanently destroying customer lead registry.`);
           if (env.DB) {
             await env.DB.prepare("DELETE FROM leads WHERE id = ?").bind(leadId).run();
           }
@@ -175,17 +466,39 @@ export default {
 
         if (request.method === "PUT") {
           const bodyData = await request.json();
+          auditLog(request, payload, `PUT /api/leads/${leadId}`, "UPDATE_LEAD", `Modifying lead parameters. Status: ${bodyData.status || 'N/A'}`);
           if (env.DB) {
             await env.DB.prepare(
               "UPDATE leads SET status = ?, notes = ? WHERE id = ?"
             ).bind(bodyData.status || "New", bodyData.notes || "", leadId).run();
           }
-          return jsonResponse({ success: true }, corsHeaders);
+
+          let updatedLead = { id: leadId, status: bodyData.status || "New", notes: bodyData.notes || "" };
+          if (env.DB) {
+            const row = await env.DB.prepare("SELECT * FROM leads WHERE id = ?").bind(leadId).first();
+            if (row) {
+              updatedLead = {
+                id: row.id,
+                name: row.name,
+                email: row.email,
+                website: row.website,
+                company: row.company,
+                phone: row.phone,
+                status: row.status,
+                notes: row.notes,
+                dateCaptured: row.created_at
+              };
+            }
+          }
+          return jsonResponse(updatedLead, corsHeaders);
         }
       }
 
       // ----------------- BULK PROJECTS CAMPAIGNS -----------------
       if (path === "/api/bulk-audit" && request.method === "POST") {
+        if (!await checkAuth(request, env)) {
+          return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
+        }
         const { urls, name } = await request.json();
         if (!urls || !Array.isArray(urls)) {
           return jsonResponse({ error: "Provide array of urls in body" }, corsHeaders, 400);
@@ -219,6 +532,9 @@ export default {
 
       // ----------------- LIST BULK JOBS -----------------
       if (path === "/api/bulk-jobs" && request.method === "GET") {
+        if (!await checkAuth(request, env)) {
+          return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
+        }
         if (env.DB) {
           const { results } = await env.DB.prepare(
             "SELECT * FROM bulk_jobs ORDER BY created_at DESC"
@@ -238,6 +554,9 @@ export default {
 
       // ----------------- VIEW DETAILED CAMPAIGN JOB -----------------
       if (path.startsWith("/api/bulk-audit/") && request.method === "GET") {
+        if (!await checkAuth(request, env)) {
+          return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
+        }
         const jobId = path.split("/")[3];
         if (!jobId) {
           return jsonResponse({ error: "Missing Job ID" }, corsHeaders, 400);
@@ -269,7 +588,10 @@ export default {
 
       // ----------------- GOOGLE SEARCH CONSOLE AUTHENTICATION -----------------
       if (path === "/api/oauth/connect") {
-        const clientId = env.GSC_CLIENT_ID || "default-gsc-client-id";
+        const clientId = env.GSC_CLIENT_ID;
+        if (!clientId) {
+          throw new Error("GSC_CLIENT_ID binding is required");
+        }
         const redirectUri = env.GSC_REDIRECT_URI || `${url.origin}/api/oauth/callback`;
         const scopes = "https://www.googleapis.com/auth/webmasters.readonly";
         
@@ -291,7 +613,13 @@ export default {
         }
 
         const clientId = env.GSC_CLIENT_ID;
+        if (!clientId) {
+          throw new Error("GSC_CLIENT_ID binding is required");
+        }
         const clientSecret = env.GSC_CLIENT_SECRET;
+        if (!clientSecret) {
+          throw new Error("GSC_CLIENT_SECRET binding is required");
+        }
         const redirectUri = env.GSC_REDIRECT_URI || `${url.origin}/api/oauth/callback`;
 
         // Exchange Authorization Code for Access & Refresh Tokens
@@ -300,8 +628,8 @@ export default {
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({
             code: authCode,
-            client_id: clientId || "",
-            client_secret: clientSecret || "",
+            client_id: clientId,
+            client_secret: clientSecret,
             redirect_uri: redirectUri,
             grant_type: "authorization_code",
           }),
@@ -464,11 +792,13 @@ async function callGeminiDirectly(promptText, apiKey, systemDirective = "") {
 // WEB AUDIT ENGINE (HTML PARSER & PAGESPEED/GEMINI INTEGRATION)
 // -------------------------------------------------------------
 async function runFullAudit(domain, companyName, auditType, env) {
-  const reportId = crypto.randomUUID();
-  let targetUrl = domain;
-  if (!/^https?:\/\//i.test(targetUrl)) {
-    targetUrl = "https://" + targetUrl;
+  const safetyCheck = await validateUrlAndResolveSafe(domain);
+  if (!safetyCheck.safe) {
+    throw new Error(`Rejected unsafe URL: ${safetyCheck.error}`);
   }
+
+  const reportId = crypto.randomUUID();
+  let targetUrl = safetyCheck.url || domain;
 
   // 1. Initial Scraping
   let siteHtml = "";
@@ -908,13 +1238,32 @@ async function processBulkJobInBackground(jobId, urls, env) {
       clean = clean.split("/")[0];
 
       try {
+        const safetyCheck = await validateUrlAndResolveSafe(rawUrl);
+        if (!safetyCheck.safe) {
+          await env.DB.prepare(
+            "UPDATE bulk_queue SET status = 'failed', progress = 100 WHERE job_id = ? AND url = ?"
+          ).bind(jobId, rawUrl).run();
+          
+          countProcessed++;
+          await env.DB.prepare(
+            "UPDATE bulk_jobs SET processed_count = ?, status = ? WHERE id = ?"
+          ).bind(
+            countProcessed,
+            countProcessed >= urls.length ? "completed" : "processing",
+            jobId
+          ).run();
+          continue;
+        }
+
+        const resolvedUrl = safetyCheck.url || clean;
+
         // Trigger background crawler for each domain in the queue list
         await env.DB.prepare(
           "UPDATE bulk_queue SET status = 'crawling', progress = 30 WHERE job_id = ? AND url = ?"
         ).bind(jobId, rawUrl).run();
 
         // Perform audit crawl
-        const partialResult = await runFullAudit(clean, clean, "Standard", env);
+        const partialResult = await runFullAudit(resolvedUrl, clean, "Standard", env);
 
         await env.DB.prepare(
           "UPDATE bulk_queue SET status = 'completed', progress = 100, score = ? WHERE job_id = ? AND url = ?"
@@ -953,4 +1302,104 @@ async function processBulkJobInBackground(jobId, urls, env) {
     console.error("Bulk crawler looping error: ", loopErr);
     await env.DB.prepare("UPDATE bulk_jobs SET status = 'failed' WHERE id = ?").bind(jobId).run();
   }
+}
+
+/**
+ * JWT Verification using standard Web Crypto API
+ */
+async function verifyJwt(token, secret) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    
+    const [headerB64, payloadB64, signatureB64] = parts;
+    
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const key = await crypto.subtle.importKey(
+      "raw",
+      keyData,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    
+    const decodeBase64Url = (str) => {
+      let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) base64 += '=';
+      const raw = atob(base64);
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {
+        arr[i] = raw.charCodeAt(i);
+      }
+      return arr;
+    };
+    
+    const data = encoder.encode(`${headerB64}.${payloadB64}`);
+    const signature = decodeBase64Url(signatureB64);
+    
+    const isValid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      signature,
+      data
+    );
+    
+    if (!isValid) return null;
+    
+    const payloadStr = atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(payloadStr);
+    
+    if (payload.exp && Date.now() / 1000 > payload.exp) {
+      return null;
+    }
+    
+    return payload;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * JWT Signing using standard Web Crypto API
+ */
+async function signJwt(payload, secret) {
+  const encoder = new TextEncoder();
+  const header = { alg: "HS256", typ: "JWT" };
+  
+  const headerB64 = btoa(JSON.stringify(header))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const payloadB64 = btoa(JSON.stringify(payload))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    
+  const data = encoder.encode(`${headerB64}.${payloadB64}`);
+  const keyData = encoder.encode(secret);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  
+  const signatureBuffer = await crypto.subtle.sign("HMAC", key, data);
+  const signatureArray = Array.from(new Uint8Array(signatureBuffer));
+  const signatureB64 = btoa(String.fromCharCode.apply(null, signatureArray))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    
+  return `${headerB64}.${payloadB64}.${signatureB64}`;
+}
+
+async function checkAuth(request, env) {
+  const jwtSecret = env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET environment variable/binding is required");
+  }
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+  const token = authHeader.split(" ")[1];
+  const payload = await verifyJwt(token, jwtSecret);
+  return payload || false;
 }

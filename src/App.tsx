@@ -20,7 +20,7 @@ import { AiOutreachScriptPanel } from './components/AiOutreachScriptPanel';
 import { GoogleSearchConsolePanel } from './components/GoogleSearchConsolePanel';
 import { PublicReportView } from './components/PublicReportView';
 import { AiKeywordStrategistPanel } from './components/AiKeywordStrategistPanel';
-import { getApiUrl } from './utils/api';
+import { getApiUrl, getAuthHeaders, setAuthToken, getAuthToken } from './utils/api';
 import {   Building2, 
   Search, 
   ListOrdered, 
@@ -48,12 +48,33 @@ import {   Building2,
   Check,
   Building,
   Activity,
-  Edit2
+  Edit2,
+  Download
 } from 'lucide-react';
 
+function getDecodedTokenPayload(token: string | null): any {
+  if (!token) return null;
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function App() {
+  // Administrative JWT Auth State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => !!getAuthToken());
+  const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bulk-engine' | 'scanner' | 'leads-crm' | 'white-label'>('dashboard');
+  const [activeTab, setActiveTab ] = useState<'dashboard' | 'bulk-engine' | 'scanner' | 'leads-crm' | 'white-label'>('dashboard');
   
   // Scanned Audits State
   const [scannedAudits, setScannedAudits] = useState<WebsiteAuditReport[]>([]);
@@ -222,6 +243,83 @@ export default function App() {
     }
   }, [selectedAuditId, scannedAudits]);
 
+  // Submit Admin Password to Login
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError(null);
+    try {
+      const res = await fetch(getApiUrl('/api/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPasswordInput })
+      });
+      const data = await res.json();
+      if (res.status === 200 && data.token) {
+        setAuthToken(data.token);
+        setIsAdminAuthenticated(true);
+        setAdminPasswordInput('');
+        // Reload protected data instantly
+        fetchLeadsList();
+        fetchBulkCampaigns();
+      } else {
+        setLoginError(data.error || "Invalid password or authorization error.");
+      }
+    } catch (err: any) {
+      setLoginError(err?.message || "Failed communicating with authentication service.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const renderAdminLoginForm = () => {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 bg-white border border-slate-200 rounded-3xl shadow-xl flex flex-col items-center">
+        <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-6 border border-indigo-100/30">
+          <Building2 className="w-8 h-8" />
+        </div>
+        
+        <h2 className="text-xl font-bold text-slate-900 mb-2 tracking-tight text-center">
+          Admin Portal Authentication
+        </h2>
+        
+        <p className="text-slate-500 text-xs text-center mb-8 max-w-xs">
+          Access to this area requires an administrator key token. Please enter your administrator master password below.
+        </p>
+        
+        <form onSubmit={handleAdminLoginSubmit} className="w-full space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Admin Password
+            </label>
+            <input
+              type="password"
+              value={adminPasswordInput}
+              onChange={(e) => setAdminPasswordInput(e.target.value)}
+              placeholder="••••••••••••"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
+              required
+            />
+          </div>
+          
+          {loginError && (
+            <p className="text-rose-500 border border-rose-100 bg-rose-50/50 px-4 py-2 rounded-xl text-xs font-semibold">
+              {loginError}
+            </p>
+          )}
+          
+          <button
+            type="submit"
+            disabled={isLoggingIn}
+            className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+          >
+            {isLoggingIn ? "Authenticating..." : "Authorize Portal"}
+          </button>
+        </form>
+      </div>
+    );
+  };
+
   // Fetch initial scanned audits list and CRM leads
   useEffect(() => {
     fetchAuditedList();
@@ -246,7 +344,13 @@ export default function App() {
 
   const fetchLeadsList = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/leads'));
+      const res = await fetch(getApiUrl('/api/leads'), {
+        headers: getAuthHeaders()
+      });
+      if (res.status === 401) {
+        setIsAdminAuthenticated(false);
+        return;
+      }
       const data = await res.json();
       setCrmLeads(data);
     } catch (e) {
@@ -256,11 +360,23 @@ export default function App() {
 
   const fetchBulkCampaigns = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/bulk-jobs'));
+      const res = await fetch(getApiUrl('/api/bulk-jobs'), {
+        headers: getAuthHeaders()
+      });
+      if (res.status === 401) {
+        setIsAdminAuthenticated(false);
+        return;
+      }
       const data = await res.json();
       setBulkJobs(data);
       if (data.length > 0 && !selectedJob) {
-        const detailRes = await fetch(getApiUrl(`/api/bulk-audit/${data[0].id}`));
+        const detailRes = await fetch(getApiUrl(`/api/bulk-audit/${data[0].id}`), {
+          headers: getAuthHeaders()
+        });
+        if (detailRes.status === 401) {
+          setIsAdminAuthenticated(false);
+          return;
+        }
         const detailData = await detailRes.json();
         setSelectedJob(detailData);
       }
@@ -275,7 +391,14 @@ export default function App() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(getApiUrl(`/api/bulk-audit/${activeBulkJobId}`));
+        const res = await fetch(getApiUrl(`/api/bulk-audit/${activeBulkJobId}`), {
+          headers: getAuthHeaders()
+        });
+        if (res.status === 401) {
+          setIsAdminAuthenticated(false);
+          clearInterval(interval);
+          return;
+        }
         const data = await res.json();
         
         // Update both list array and selected element
@@ -379,7 +502,7 @@ export default function App() {
     try {
       const leadRes = await fetch(getApiUrl('/api/leads'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           name: demoWidgetName || 'Organic Landing Prospect',
           email: demoWidgetEmail,
@@ -388,7 +511,11 @@ export default function App() {
         })
       });
       const newLead = await leadRes.json();
-      setCrmLeads(prev => [newLead, ...prev]);
+      if (leadRes.ok) {
+        setCrmLeads(prev => [newLead, ...prev]);
+      } else {
+        console.warn("Could not write dynamic prospect lead: backend rejected request", newLead);
+      }
     } catch {
       console.warn("Could not write dynamic prospect lead");
     }
@@ -410,7 +537,7 @@ export default function App() {
     try {
       const response = await fetch(getApiUrl('/api/bulk-audit'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           listName: bulkCampaignName,
           urls: urls,
@@ -435,7 +562,7 @@ export default function App() {
     try {
       const res = await fetch(getApiUrl('/api/leads'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           name: newLeadForm.name,
           email: newLeadForm.email,
@@ -461,32 +588,96 @@ export default function App() {
     try {
       const res = await fetch(getApiUrl(`/api/leads/${selectedLeadId}`), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status: statusVal, notes: notesVal })
       });
-      const updated = await res.json();
       
+      if (!res.ok) {
+        if (res.status === 403) {
+          alert("Forbidden: Only administrators are authorized to update lead status or details.");
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(`Failed to update lead: ${errData.error || 'Server error'}`);
+        }
+        return;
+      }
+
+      const updated = await res.json();
       setCrmLeads(prev => prev.map(lead => lead.id === selectedLeadId ? updated : lead));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed updating lead pipeline", err);
+      alert(`Update error: ${err.message}`);
     }
   };
 
   // Delete a CRM Lead
   const handleDeleteLead = async (id: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this lead?")) {
+      return;
+    }
     try {
-      await fetch(getApiUrl(`/api/leads/${id}`), { method: 'DELETE' });
+      const res = await fetch(getApiUrl(`/api/leads/${id}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (!res.ok) {
+        if (res.status === 403) {
+          alert("Forbidden: Only administrators are authorized to delete leads.");
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(`Failed to delete lead: ${errData.error || 'Server error'}`);
+        }
+        return;
+      }
+
       setCrmLeads(prev => prev.filter(lead => lead.id !== id));
       if (selectedLeadId === id) setSelectedLeadId(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed deleting lead record", err);
+      alert(`Delete error: ${err.message}`);
+    }
+  };
+
+  // Export CRM Leads to CSV Spreadsheet
+  const handleExportLeads = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/leads/export'), {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          alert("Forbidden: Only administrators are authorized to export CRM leads.");
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          alert(`Failed to export leads: ${errData.error || 'Server error'}`);
+        }
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `crm-leads-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err: any) {
+      console.error("Export leads error:", err);
+      alert(`Export error: ${err.message}`);
     }
   };
 
   // Fetch specific selected job detail row
   const handleSelectJob = async (id: string) => {
     try {
-      const res = await fetch(getApiUrl(`/api/bulk-audit/${id}`));
+      const res = await fetch(getApiUrl(`/api/bulk-audit/${id}`), {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setSelectedJob(data);
     } catch (err) {
@@ -690,6 +881,18 @@ export default function App() {
               <PlusCircle className="w-4 h-4" />
               + Run Audit Proposal
             </button>
+            {isAdminAuthenticated && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthToken(null);
+                  setIsAdminAuthenticated(false);
+                }}
+                className="text-rose-600 hover:text-rose-550 bg-rose-50 hover:bg-rose-100/50 border border-rose-200 text-xs font-bold px-3.5 py-2 rounded-xl transition cursor-pointer"
+              >
+                Sign Out
+              </button>
+            )}
             <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-250 flex items-center justify-center font-bold text-slate-650 text-xs shadow-2xs font-mono uppercase tracking-widest cursor-pointer">
               {whiteLabelSettings.logoLetter}
             </div>
@@ -922,6 +1125,7 @@ export default function App() {
 
           {/* BULK CRAWLER CAMPAIGNS ENGINE */}
           {activeTab === 'bulk-engine' && (
+            !isAdminAuthenticated ? renderAdminLoginForm() : (
             <div id="bulk-engine-tab-content" className="space-y-8 animate-fade-in">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 
@@ -1132,6 +1336,7 @@ export default function App() {
 
               </div>
             </div>
+            )
           )}
 
           {/* SITE SCANNER CRAWLER VIEW */}
@@ -1326,6 +1531,7 @@ export default function App() {
 
           {/* LEAD CAPTURE CRM VIEW */}
           {activeTab === 'leads-crm' && (
+            !isAdminAuthenticated ? renderAdminLoginForm() : (
             <div id="leads-crm-tab-content" className="space-y-8 animate-fade-in">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 
@@ -1336,6 +1542,15 @@ export default function App() {
                       <h3 className="font-bold font-display text-slate-900 text-sm">Organic CRM Capture Registry</h3>
                       <p className="text-xs text-slate-450">Manage dynamic lead pipelines and prospect communication logs</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleExportLeads}
+                      className="bg-white hover:bg-slate-50 text-slate-700 text-slate-900 border border-slate-200 text-xs font-semibold px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      title="Export CRM leads to CSV spreadsheet"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Export Leads</span>
+                    </button>
                   </div>
 
                   <div className="overflow-x-auto flex-1">
@@ -1607,10 +1822,12 @@ export default function App() {
 
               </div>
             </div>
+            )
           )}
 
           {/* WHITE-LABEL BRANDING SETTINGS VIEW */}
           {activeTab === 'white-label' && (
+            !isAdminAuthenticated ? renderAdminLoginForm() : (
             <div id="white-label-tab-content" className="space-y-6 animate-fade-in">
               <div className="max-w-3xl bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
                 
@@ -1729,6 +1946,7 @@ export default function App() {
 
               </div>
             </div>
+            )
           )}
 
         </div>

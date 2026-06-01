@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -7,6 +7,8 @@ import dns from "dns";
 import http from "http";
 import https from "https";
 import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
+import { validateUrlAndResolveSafe, ssrfSafeLookup } from "./server-utils/ssrfValidator";
 
 dotenv.config();
 
@@ -15,9 +17,24 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Enable CORS for custom deployments (like Cloudflare Workers / Pages)
+// Enable CORS for custom deployments (like Cloudflare Workers / Pages) using a whitelist-based CORS policy
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin;
+  
+  if (origin) {
+    if (allowedOrigins.includes(origin)) {
+      res.header("Access-Control-Allow-Origin", origin);
+    } else {
+      res.status(403).json({ error: "Forbidden: Origin not whitelisted by CORS policy." });
+      return;
+    }
+  }
+
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   if (req.method === "OPTIONS") {
@@ -27,28 +44,46 @@ app.use((req, res, next) => {
   next();
 });
 
+// Load security and integration credentials from environment
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  throw new Error("GEMINI_API_KEY environment variable is required");
+}
+
+const PAGESPEED_API_KEY = process.env.PAGESPEED_API_KEY;
+if (!PAGESPEED_API_KEY) {
+  throw new Error("PAGESPEED_API_KEY environment variable is required");
+}
+
+const OPENGRAPH_API_KEY = process.env.OPENGRAPH_API_KEY;
+if (!OPENGRAPH_API_KEY) {
+  throw new Error("OPENGRAPH_API_KEY environment variable is required");
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) {
+  throw new Error("ADMIN_PASSWORD environment variable is required");
+}
+
 // Initialize Gemini API client safely with the recommended pattern
 let ai: GoogleGenAI | null = null;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyAdOW9_k8okc1Q1meAyDzfuWR9rfFry-qo";
-const PAGESPEED_API_KEY = process.env.PAGESPEED_API_KEY || "AIzaSyAM7XqM4w9o0DYQhloKwBY2690dl2CdSZo";
-const OPENGRAPH_API_KEY = process.env.OPENGRAPH_API_KEY || "8f326243-24e4-4388-b6b1-cde2fa1a1f4a";
-
-if (GEMINI_API_KEY) {
-  try {
-    ai = new GoogleGenAI({
-      apiKey: GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
+try {
+  ai = new GoogleGenAI({
+    apiKey: GEMINI_API_KEY,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
       }
-    });
-    console.log("Gemini API client initialized successfully");
-  } catch (err) {
-    console.warn("Failed to initialize Gemini API client:", err);
-  }
-} else {
-  console.warn("GEMINI_API_KEY environment variable is not defined - running in simulation-enhanced mode");
+    }
+  });
+  console.log("Gemini API client initialized successfully");
+} catch (err) {
+  console.warn("Failed to initialize Gemini API client:", err);
 }
 
 // Robust Gemini content generation module with exponential retry and model fallback support
@@ -233,10 +268,13 @@ async function getHtmlMetadata(targetUrl: string): Promise<{ title?: string; des
     isHttps: targetUrl.startsWith("https://")
   };
 
-  let resolvedUrl = targetUrl;
-  if (!/^https?:\/\//i.test(resolvedUrl)) {
-    resolvedUrl = "https://" + resolvedUrl;
+  const safetyCheck = await validateUrlAndResolveSafe(targetUrl);
+  if (!safetyCheck.safe) {
+    console.warn(`Blocked unsafe URL from being scraped inside server: ${targetUrl}. Reason: ${safetyCheck.error}`);
+    return result;
   }
+
+  let resolvedUrl = safetyCheck.url || targetUrl;
 
   // 1. Try to fetch from Opengraph.io if API key is provided
   if (OPENGRAPH_API_KEY) {
@@ -277,7 +315,8 @@ async function getHtmlMetadata(targetUrl: string): Promise<{ title?: string; des
     const req = lib.get(resolvedUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SEO-Audit-Crawler/1.0'
-      }
+      },
+      lookup: ssrfSafeLookup
     }, (res) => {
       let data = "";
       res.setEncoding("utf8");
@@ -823,11 +862,98 @@ function generateSimulationAudit(domain: string, companyName: string, type: 'Sta
 }
 
 // REST APIs
-app.get("/api/leads", (req, res) => {
+
+// Authentication and Session JWT Management Security Middleware
+const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: Missing token" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET!) as { role: string; sub?: string };
+    (req as any).user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });
+  }
+};
+
+const USER_PASSWORD = process.env.USER_PASSWORD || "user123";
+
+// Role authorization middleware helpers
+const requireRole = (allowedRoles: ("admin" | "user")[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user;
+    if (!user || !user.role || !allowedRoles.includes(user.role)) {
+      return res.status(403).json({ error: `Forbidden: This action requires one of the following roles: ${allowedRoles.join(", ")}` });
+    }
+    next();
+  };
+};
+
+// Reusable Audit Logger for sensitive customer data endpoints
+function auditLog(req: Request, endpoint: string, action: string, description: string) {
+  const timestamp = new Date().toISOString();
+  const userName = (req as any).user?.sub || "anonymous_user";
+  const userRole = (req as any).user?.role || "no_role";
+  const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || "unknown_ip";
+  console.log(
+    `[CRM-AUDIT-LOG] [${timestamp}] Principal: "${userName}" (Role: ${userRole}) | Action: "${action}" | Endpoint: "${endpoint}" | Context: "${description}" | Source IP: ${ipAddress}`
+  );
+}
+
+// User & Admin Login Token Generation Endpoint
+app.post("/api/login", (req, res) => {
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ error: "Password is required" });
+  }
+
+  if (password === ADMIN_PASSWORD) {
+    const token = jwt.sign({ role: "admin", sub: "admin_user" }, JWT_SECRET!, { expiresIn: "24h" });
+    res.json({ token, role: "admin" });
+  } else if (password === USER_PASSWORD) {
+    const token = jwt.sign({ role: "user", sub: "staff_user" }, JWT_SECRET!, { expiresIn: "24h" });
+    res.json({ token, role: "user" });
+  } else {
+    return res.status(401).json({ error: "Invalid password" });
+  }
+});
+
+app.get("/api/leads", authMiddleware, requireRole(["admin", "user"]), (req, res) => {
+  // Audit the endpoint that exposes all emails, phones, notes, and customer data
+  auditLog(req, "GET /api/leads", "READ_ALL_LEADS", `Exposing complete CRM database. Record count: ${db.leads.length}`);
   res.json(db.leads);
 });
 
-app.post("/api/leads", (req, res) => {
+// Admin-only CSV export of leads
+app.get("/api/leads/export", authMiddleware, requireRole(["admin"]), (req, res) => {
+  auditLog(req, "GET /api/leads/export", "EXPORT_ALL_LEADS", `Generating and exporting complete customer lead spreadsheet. Count: ${db.leads.length}`);
+
+  let csv = "ID,Name,Email,Website,Phone,Company,Overall Score,Status,Date Captured,Notes\n";
+  for (const lead of db.leads) {
+    const safeId = (lead.id || "").replace(/"/g, '""');
+    const safeName = (lead.name || "").replace(/"/g, '""');
+    const safeEmail = (lead.email || "").replace(/"/g, '""');
+    const safeWebsite = (lead.website || "").replace(/"/g, '""');
+    const safePhone = (lead.phone || "").replace(/"/g, '""');
+    const safeCompany = (lead.company || "").replace(/"/g, '""');
+    const safeScore = lead.overallScore || "";
+    const safeStatus = (lead.status || "").replace(/"/g, '""');
+    const safeDate = (lead.dateCaptured || "").replace(/"/g, '""');
+    const safeNotes = (lead.notes || "").replace(/"/g, '""');
+    
+    csv += `"${safeId}","${safeName}","${safeEmail}","${safeWebsite}","${safePhone}","${safeCompany}","${safeScore}","${safeStatus}","${safeDate}","${safeNotes}"\n`;
+  }
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename=leads-export-${Date.now()}.csv`);
+  res.status(200).send(csv);
+});
+
+app.post("/api/leads", authMiddleware, requireRole(["admin", "user"]), (req, res) => {
   const { name, email, website, phone, company, overallScore } = req.body;
   if (!email || !website) {
     return res.status(400).json({ error: "Email and Website are required parameters" });
@@ -847,11 +973,14 @@ app.post("/api/leads", (req, res) => {
     notes: "Captured directly via SEO Audit Landing Widget."
   };
 
+  // Audit entry creation of customer data
+  auditLog(req, "POST /api/leads", "CREATE_LEAD", `Inserting new CRM registry: ${currentLead.name} (${currentLead.email})`);
+
   db.leads.unshift(currentLead);
   res.status(201).json(currentLead);
 });
 
-app.put("/api/leads/:id", (req, res) => {
+app.put("/api/leads/:id", authMiddleware, requireRole(["admin"]), (req, res) => {
   const { id } = req.params;
   const { status, notes } = req.body;
   const leadIdx = db.leads.findIndex(l => l.id === id);
@@ -859,19 +988,26 @@ app.put("/api/leads/:id", (req, res) => {
     return res.status(404).json({ error: "Lead not found" });
   }
 
+  auditLog(req, `PUT /api/leads/${id}`, "UPDATE_LEAD", `Modifying lead parameters. Target: ${db.leads[leadIdx].name}. Updated Status: ${status || 'N/A'}`);
+
   if (status) db.leads[leadIdx].status = status;
   if (notes !== undefined) db.leads[leadIdx].notes = notes;
 
   res.json(db.leads[leadIdx]);
 });
 
-app.delete("/api/leads/:id", (req, res) => {
+app.delete("/api/leads/:id", authMiddleware, requireRole(["admin"]), (req, res) => {
   const { id } = req.params;
   const prevLen = db.leads.length;
-  db.leads = db.leads.filter(l => l.id !== id);
-  if (db.leads.length === prevLen) {
+  const targetLead = db.leads.find(l => l.id === id);
+  
+  if (!targetLead) {
     return res.status(404).json({ error: "Lead not found" });
   }
+
+  auditLog(req, `DELETE /api/leads/${id}`, "DELETE_LEAD", `Permanently destroying customer lead registry: ${targetLead.name} (${targetLead.email})`);
+
+  db.leads = db.leads.filter(l => l.id !== id);
   res.json({ success: true });
 });
 
@@ -881,6 +1017,11 @@ app.post("/api/audit", async (req, res) => {
   
   if (!url) {
     return res.status(400).json({ error: "URL parameter is required" });
+  }
+
+  const safetyCheck = await validateUrlAndResolveSafe(url);
+  if (!safetyCheck.safe) {
+    return res.status(400).json({ error: `Rejected unsafe URL: ${safetyCheck.error}` });
   }
 
   const executionTasks: Promise<void>[] = [];
@@ -945,6 +1086,12 @@ app.post("/api/audit", async (req, res) => {
           if (!/^https?:\/\//i.test(targetForPsi)) {
             targetForPsi = "https://" + targetForPsi;
           }
+          const safetyCheck = await validateUrlAndResolveSafe(targetForPsi);
+          if (!safetyCheck.safe) {
+            console.warn(`Blocked unsafe URL from PageSpeed Insights: ${targetForPsi}`);
+            return;
+          }
+          targetForPsi = safetyCheck.url || targetForPsi;
           const psiUrl = `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetForPsi)}&category=performance&category=seo&key=${PAGESPEED_API_KEY}`;
           console.log(`[Parallel task] Calling Google PageSpeed Insights API for root url: ${targetForPsi}`);
 
@@ -1132,7 +1279,7 @@ app.get("/api/audited-list", (req, res) => {
 });
 
 // Start Bulk Enterprise Audit Job API
-app.post("/api/bulk-audit", (req, res) => {
+app.post("/api/bulk-audit", authMiddleware, async (req, res) => {
   const { listName, urls, auditType } = req.body;
   if (!urls || !Array.isArray(urls) || urls.length === 0) {
     return res.status(400).json({ error: "An array of URLs is required for bulk processing" });
@@ -1141,19 +1288,35 @@ app.post("/api/bulk-audit", (req, res) => {
   const jobId = "bulk_job_" + Date.now();
   const targetUrls = urls.map(u => u.trim()).filter(u => u !== "");
 
-  const items = targetUrls.map((url, index) => ({
-    id: `item_${jobId}_${index}`,
-    url,
-    status: 'queued' as const,
-    progress: 0
+  // Pre-validate all URLs in parallel for safety
+  const items = await Promise.all(targetUrls.map(async (url, index) => {
+    const safetyCheck = await validateUrlAndResolveSafe(url);
+    if (!safetyCheck.safe) {
+      return {
+        id: `item_${jobId}_${index}`,
+        url,
+        status: 'failed' as const,
+        progress: 100,
+        score: 0,
+        error: safetyCheck.error || "Blocked unsafe URL"
+      };
+    }
+    return {
+      id: `item_${jobId}_${index}`,
+      url: safetyCheck.url || url,
+      status: 'queued' as const,
+      progress: 0
+    };
   }));
+
+  const validItemsCount = items.filter(item => item.status === 'queued').length;
 
   db.bulkJobs[jobId] = {
     id: jobId,
     name: listName || `Bulk Campaign - ${new Date().toLocaleDateString()}`,
-    status: 'processing',
+    status: validItemsCount === 0 ? 'completed' : 'processing',
     totalCount: items.length,
-    processedCount: 0,
+    processedCount: items.length - validItemsCount,
     items
   };
 
@@ -1177,6 +1340,11 @@ app.post("/api/bulk-audit", (req, res) => {
       if (idx >= job.items.length) break;
 
       const item = job.items[idx];
+      if (item.status === 'failed') {
+        currentIndex++;
+        continue;
+      }
+
       item.status = 'crawling';
       item.progress = 25;
 
@@ -1213,7 +1381,7 @@ app.post("/api/bulk-audit", (req, res) => {
 });
 
 // Get Bulk Campaign Status
-app.get("/api/bulk-audit/:jobId", (req, res) => {
+app.get("/api/bulk-audit/:jobId", authMiddleware, (req, res) => {
   const { jobId } = req.params;
   const job = db.bulkJobs[jobId];
   if (!job) {
@@ -1223,7 +1391,7 @@ app.get("/api/bulk-audit/:jobId", (req, res) => {
 });
 
 // Get List of All Bulk Jobs
-app.get("/api/bulk-jobs", (req, res) => {
+app.get("/api/bulk-jobs", authMiddleware, (req, res) => {
   const list = Object.values(db.bulkJobs).map((job: any) => ({
     id: job.id,
     name: job.name,

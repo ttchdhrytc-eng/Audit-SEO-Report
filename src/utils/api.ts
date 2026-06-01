@@ -47,3 +47,26 @@ export function getApiUrl(path: string): string {
 
   return path;
 }
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem('revenue_clutch_jwt_token');
+}
+
+export function setAuthToken(token: string | null): void {
+  if (token) {
+    localStorage.setItem('revenue_clutch_jwt_token', token);
+  } else {
+    localStorage.removeItem('revenue_clutch_jwt_token');
+  }
+}
+
+export function getAuthHeaders(headers: HeadersInit = {}): HeadersInit {
+  const token = getAuthToken();
+  if (token) {
+    return {
+      ...headers,
+      'Authorization': `Bearer ${token}`
+    };
+  }
+  return headers;
+}

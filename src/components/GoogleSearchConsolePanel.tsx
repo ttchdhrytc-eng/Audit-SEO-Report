@@ -76,7 +76,10 @@ export const GoogleSearchConsolePanel: React.FC<GoogleSearchConsolePanelProps> =
     .split('/')[0]
     .split('?')[0];
 
-  const GOOGLE_CLIENT_ID = "559381810260-1ubhhng77a1tq9gjggju9buoh541pa7i.apps.googleusercontent.com";
+  const GOOGLE_CLIENT_ID = (import.meta as any).env.VITE_GSC_CLIENT_ID;
+  if (!GOOGLE_CLIENT_ID) {
+    throw new Error("VITE_GSC_CLIENT_ID is required");
+  }
 
   // Trigger Google OAuth 2.0 Implicit Flow popup
   const handleConnectGoogle = () => {
