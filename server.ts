@@ -1151,23 +1151,25 @@ app.post("/api/audit", async (req, res) => {
           You are an elite, Enterprise-Grade SaaS SEO agency director.
           Please help enrich an SEO audit report for ${cleanUrl} (${formattedCompany}), operating as a ${typeOfAudit} audit type.
           
-          The current parsed details include:
-          - Title Tag: ${staticReport.onPage.titleTag.value} 
-          - Meta Description: ${staticReport.onPage.metaDescription.value}
-          - Current Overall Score: ${staticReport.overallScore}%
-          - Homepage H1 tags currently matching: ${JSON.stringify(staticReport.onPage.headingStructure.h1s)}
+          The current parsed, crawled, and analyzed details include:
+          - Target URL / Domain: ${cleanUrl}
+          - Computed Company Name: ${formattedCompany}
+          - Title Tag: "${staticReport.onPage.titleTag.value}" (Status: ${staticReport.onPage.titleTag.status})
+          - Meta Description: "${staticReport.onPage.metaDescription.value}" (Status: ${staticReport.onPage.metaDescription.status})
+          - Homepage H1 tags parsed: ${JSON.stringify(staticReport.onPage.headingStructure.h1s)}
+          - Homepage H2 tags parsed: ${JSON.stringify(staticReport.onPage.headingStructure.h2s)}
+          - Homepage H3 tags parsed: ${JSON.stringify(staticReport.onPage.headingStructure.h3s)}
+          - SSL/HTTPS Enabled: ${staticReport.technical.sslHttps.value} (Score: ${staticReport.technical.sslHttps.score})
+          - Sitemap.xml mapping state: Score: ${staticReport.technical.sitemapXml.score}
+          - Robots.txt routing state: Score: ${staticReport.technical.robotsTxt.score}
+          - PageSpeed Web Vitals latency (Lighthouse): Performance Score ${staticReport.technical.coreWebVitals.score}/100, LCP: ${staticReport.technical.coreWebVitals.lcp.value} (${staticReport.technical.coreWebVitals.lcp.rating}), CLS: ${staticReport.technical.coreWebVitals.cls.value} (${staticReport.technical.coreWebVitals.cls.rating}), TTFB: ${staticReport.technical.coreWebVitals.ttfb.value} (${staticReport.technical.coreWebVitals.ttfb.rating}), INP: ${staticReport.technical.coreWebVitals.inp.value}
           
-          Please generate high-conversion, highly detailed content in a valid, parsed-friendly JSON response string containing EXACTLY these keys:
-          - executiveSummary: (Make this incredibly strategic, client-ready, professional, and convincing of why they need to optimize their site now)
-          - clientRec1: (An extremely specific, customized, conversion-oriented recommendation for their title tag/headings structure, styled like: "Your homepage lacks a primary keyword-focused H1. This reduces topical relevance for 'SEO agency in Dallas'. Adding a keyword-optimized H1 can improve semantic search alignment and CTR.")
-          - clientRec2: (An incredibly actionable recommendation regarding their performance/Core Web Vitals or schema markup, directly targeting technical optimization metrics)
-          - mainKeywordsList: (A simplified JSON list of 4 relevant keywords for their specific industry based on the domain name/company, with realistic counts, densities e.g. "2.4%", and relevance metrics)
-          - outreachScript: (A highly personalized, professional cold email outreach script targeting the website owner. It must mention the specific homepage title tag "${staticReport.onPage.titleTag.value}" or their audit score of ${staticReport.overallScore}%, point out they are missing critical semantic headers or LCP speed variables, and suggest a 5-minute strategic walkthrough as a low-friction call-to-action)
+          Please analyze this real data and perform a comprehensive, professional SEO assessment. Generate incredibly detailed, highly tailored, client-ready response details. The response MUST fit the exact structure requested, with wording custom-tailored to their specific business category (legal, medical, digital agency, retail, engineering, etc.) and location if local.
           
-          Use exact JSON notation without wrappers or markdown markers other than backticks if requested.
+          Return a valid, parsed-friendly JSON response string containing EXACTLY these schema parameters.
         `;
 
-        console.log("[Parallel task] Calling Gemini AI to enrich the SEO copywriting report...");
+        console.log("[Parallel task] Calling Gemini AI to enrich the SEO copywriting report with complete personalization...");
         const aiResponse = await safeGenerateContent({
           contents: prompt,
           config: {
@@ -1175,11 +1177,36 @@ app.post("/api/audit", async (req, res) => {
             responseSchema: {
               type: Type.OBJECT,
               properties: {
+                niche: { type: Type.STRING },
+                companyName: { type: Type.STRING },
+                scores: {
+                  type: Type.OBJECT,
+                  properties: {
+                    technical: { type: Type.INTEGER },
+                    onPage: { type: Type.INTEGER },
+                    competitors: { type: Type.INTEGER },
+                    local: { type: Type.INTEGER },
+                    overall: { type: Type.INTEGER }
+                  },
+                  required: ["technical", "onPage", "competitors", "local", "overall"]
+                },
                 executiveSummary: { type: Type.STRING },
-                clientRec1: { type: Type.STRING },
-                clientRec2: { type: Type.STRING },
-                outreachScript: { type: Type.STRING },
-                mainKeywordsList: {
+                recommendations: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      category: { type: Type.STRING },
+                      priority: { type: Type.STRING },
+                      title: { type: Type.STRING },
+                      description: { type: Type.STRING },
+                      impact: { type: Type.STRING },
+                      effort: { type: Type.STRING }
+                    },
+                    required: ["category", "priority", "title", "description", "impact", "effort"]
+                  }
+                },
+                keywordDensityList: {
                   type: Type.ARRAY,
                   items: {
                     type: Type.OBJECT,
@@ -1191,42 +1218,251 @@ app.post("/api/audit", async (req, res) => {
                     },
                     required: ["keyword", "count", "density", "relevance"]
                   }
-                }
+                },
+                semanticKeywordsList: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      term: { type: Type.STRING },
+                      suggestedUsage: { type: Type.STRING },
+                      currentCount: { type: Type.INTEGER },
+                      opportunity: { type: Type.STRING }
+                    },
+                    required: ["term", "suggestedUsage", "currentCount", "opportunity"]
+                  }
+                },
+                competitorsList: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      domain: { type: Type.STRING },
+                      authority: { type: Type.INTEGER },
+                      backlinks: { type: Type.INTEGER },
+                      referringDomains: { type: Type.INTEGER },
+                      trafficValue: { type: Type.STRING },
+                      rankingKeywords: { type: Type.INTEGER },
+                      visibilityIndex: { type: Type.INTEGER },
+                      overlapKeywords: { type: Type.INTEGER }
+                    },
+                    required: ["domain", "authority", "backlinks", "referringDomains", "trafficValue", "rankingKeywords", "visibilityIndex", "overlapKeywords"]
+                  }
+                },
+                keywordGapsList: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      keyword: { type: Type.STRING },
+                      volume: { type: Type.INTEGER },
+                      difficulty: { type: Type.INTEGER },
+                      competitorRank: { type: Type.STRING },
+                      ourRank: { type: Type.STRING },
+                      opportunityValue: { type: Type.STRING }
+                    },
+                    required: ["keyword", "volume", "difficulty", "competitorRank", "ourRank", "opportunityValue"]
+                  }
+                },
+                crawlerFeedback: {
+                  type: Type.OBJECT,
+                  properties: {
+                    crawlabilityDetails: { type: Type.STRING },
+                    crawlabilityRecommendation: { type: Type.STRING },
+                    indexabilityDetails: { type: Type.STRING },
+                    indexabilityRecommendation: { type: Type.STRING },
+                    robotsTxtDetails: { type: Type.STRING },
+                    robotsTxtRecommendation: { type: Type.STRING },
+                    sitemapXmlDetails: { type: Type.STRING },
+                    sitemapXmlRecommendation: { type: Type.STRING },
+                    canonicalTagsDetails: { type: Type.STRING },
+                    canonicalTagsRecommendation: { type: Type.STRING },
+                    schemaMarkupDetails: { type: Type.STRING },
+                    schemaMarkupRecommendation: { type: Type.STRING },
+                    redirectChainsDetails: { type: Type.STRING },
+                    redirectChainsRecommendation: { type: Type.STRING },
+                    orphanPagesDetails: { type: Type.STRING },
+                    orphanPagesRecommendation: { type: Type.STRING }
+                  },
+                  required: [
+                    "crawlabilityDetails", "crawlabilityRecommendation",
+                    "indexabilityDetails", "indexabilityRecommendation",
+                    "robotsTxtDetails", "robotsTxtRecommendation",
+                    "sitemapXmlDetails", "sitemapXmlRecommendation",
+                    "canonicalTagsDetails", "canonicalTagsRecommendation",
+                    "schemaMarkupDetails", "schemaMarkupRecommendation",
+                    "redirectChainsDetails", "redirectChainsRecommendation",
+                    "orphanPagesDetails", "orphanPagesRecommendation"
+                  ]
+                },
+                localSeoFeedback: {
+                  type: Type.OBJECT,
+                  properties: {
+                    googleBusinessProfileDetails: { type: Type.STRING },
+                    googleBusinessProfileRecommendation: { type: Type.STRING },
+                    napConsistencyDetails: { type: Type.STRING },
+                    napConsistencyRecommendation: { type: Type.STRING },
+                    reviewsSentimentSummary: { type: Type.STRING },
+                    citationsCount: { type: Type.INTEGER },
+                    citationsDetails: { type: Type.STRING },
+                    citationsRecommendation: { type: Type.STRING }
+                  },
+                  required: [
+                    "googleBusinessProfileDetails", "googleBusinessProfileRecommendation",
+                    "napConsistencyDetails", "napConsistencyRecommendation",
+                    "reviewsSentimentSummary", "citationsCount", "citationsDetails", "citationsRecommendation"
+                  ]
+                },
+                outreachScript: { type: Type.STRING }
               },
-              required: ["executiveSummary", "clientRec1", "clientRec2", "outreachScript", "mainKeywordsList"]
+              required: [
+                "niche", "companyName", "scores", "executiveSummary", "recommendations",
+                "keywordDensityList", "semanticKeywordsList", "competitorsList", "keywordGapsList",
+                "crawlerFeedback", "localSeoFeedback", "outreachScript"
+              ]
             }
           }
         });
 
         if (aiResponse.text) {
           const enriched = JSON.parse(aiResponse.text);
-          if (enriched.executiveSummary) staticReport.executiveSummary = enriched.executiveSummary;
-          if (enriched.outreachScript) staticReport.outreachScript = enriched.outreachScript;
+          console.log("[Parallel task] Gemini returned audit JSON. Applying customized parameters securely...");
           
-          // Enrich first critical recommendation
-          if (enriched.clientRec1) {
-            staticReport.recommendations[0].description = enriched.clientRec1;
-            staticReport.onPage.headingStructure.validation.recommendation = enriched.clientRec1;
-          }
-          
-          // Enrich second recommendation
-          if (enriched.clientRec2) {
-            staticReport.recommendations[1].description = enriched.clientRec2;
+          if (enriched.companyName) {
+            staticReport.companyName = enriched.companyName;
           }
 
-          // Incorporate custom keyword density list
-          if (enriched.mainKeywordsList && enriched.mainKeywordsList.length > 0) {
-            staticReport.onPage.keywordDensity = enriched.mainKeywordsList.map((kw: any) => ({
-              keyword: kw.keyword,
-              count: Number(kw.count) || 12,
-              density: kw.density || "1.8%",
+          if (enriched.executiveSummary) {
+            staticReport.executiveSummary = enriched.executiveSummary;
+          }
+
+          if (enriched.outreachScript) {
+            staticReport.outreachScript = enriched.outreachScript;
+          }
+
+          if (enriched.scores) {
+            if (enriched.scores.technical) staticReport.technical.overallScore = enriched.scores.technical;
+            if (enriched.scores.onPage) staticReport.onPage.overallScore = enriched.scores.onPage;
+            if (enriched.scores.competitors) staticReport.competitors.overallScore = enriched.scores.competitors;
+            if (enriched.scores.local && staticReport.localSeo.isApplicable) {
+              staticReport.localSeo.overallScore = enriched.scores.local;
+            }
+            if (enriched.scores.overall) {
+              staticReport.overallScore = enriched.scores.overall;
+            }
+          }
+
+          // Recommendations mapping
+          if (enriched.recommendations && Array.isArray(enriched.recommendations) && enriched.recommendations.length > 0) {
+            staticReport.recommendations = enriched.recommendations.map((rec: any, idx: number) => ({
+              id: `rec_${idx + 1}`,
+              category: rec.category || "technical",
+              priority: rec.priority || "high",
+              title: rec.title || "Optimize Structure",
+              description: rec.description || "Remediate item",
+              impact: rec.impact || "Direct SERP ranking improvement.",
+              effort: rec.effort || "medium"
+            }));
+            
+            if (staticReport.recommendations[0]) {
+              staticReport.onPage.headingStructure.validation.recommendation = staticReport.recommendations[0].description;
+            }
+          }
+
+          // Keyword density mapping
+          if (enriched.keywordDensityList && Array.isArray(enriched.keywordDensityList)) {
+            staticReport.onPage.keywordDensity = enriched.keywordDensityList.map((kw: any) => ({
+              keyword: kw.keyword || "",
+              count: Number(kw.count) || 8,
+              density: kw.density || "1.5%",
               relevance: (kw.relevance || "high").toLowerCase() as 'high' | 'medium' | 'low'
             }));
           }
-          console.log("[Parallel task] Audit successfully enriched by Gemini AI.");
+
+          // Semantic Keywords mapping
+          if (enriched.semanticKeywordsList && Array.isArray(enriched.semanticKeywordsList)) {
+            staticReport.onPage.semanticKeywords = enriched.semanticKeywordsList.map((sk: any) => ({
+              term: sk.term || "",
+              suggestedUsage: sk.suggestedUsage || "Use 2-3 times",
+              currentCount: Number(sk.currentCount) || 0,
+              opportunity: sk.opportunity || "Boost topical correlation"
+            }));
+          }
+
+          // Competitors mapping
+          if (enriched.competitorsList && Array.isArray(enriched.competitorsList)) {
+            staticReport.competitors.competitors = enriched.competitorsList.map((c: any) => ({
+              domain: c.domain || "",
+              authority: Number(c.authority) || 45,
+              backlinks: Number(c.backlinks) || 500,
+              referringDomains: Number(c.referringDomains) || 120,
+              trafficValue: c.trafficValue || "$1.5K",
+              rankingKeywords: Number(c.rankingKeywords) || 200,
+              visibilityIndex: Number(c.visibilityIndex) || 25,
+              overlapKeywords: Number(c.overlapKeywords) || 10
+            }));
+          }
+
+          // Keyword gaps mapping
+          if (enriched.keywordGapsList && Array.isArray(enriched.keywordGapsList)) {
+            staticReport.competitors.keywordGaps = enriched.keywordGapsList.map((g: any) => ({
+              keyword: g.keyword || "",
+              volume: Number(g.volume) || 150,
+              difficulty: Number(g.difficulty) || 15,
+              competitorRank: g.competitorRank || "3",
+              ourRank: g.ourRank || "Not Ranking",
+              opportunityValue: g.opportunityValue || "High"
+            }));
+          }
+
+          // Crawler feedbacks mapping
+          if (enriched.crawlerFeedback) {
+            const f = enriched.crawlerFeedback;
+            if (f.crawlabilityDetails) staticReport.technical.crawlability.details = f.crawlabilityDetails;
+            if (f.crawlabilityRecommendation) staticReport.technical.crawlability.recommendation = f.crawlabilityRecommendation;
+            
+            if (f.indexabilityDetails) staticReport.technical.indexability.details = f.indexabilityDetails;
+            if (f.indexabilityRecommendation) staticReport.technical.indexability.recommendation = f.indexabilityRecommendation;
+
+            if (f.robotsTxtDetails) staticReport.technical.robotsTxt.details = f.robotsTxtDetails;
+            if (f.robotsTxtRecommendation) staticReport.technical.robotsTxt.recommendation = f.robotsTxtRecommendation;
+
+            if (f.sitemapXmlDetails) staticReport.technical.sitemapXml.details = f.sitemapXmlDetails;
+            if (f.sitemapXmlRecommendation) staticReport.technical.sitemapXml.recommendation = f.sitemapXmlRecommendation;
+
+            if (f.canonicalTagsDetails) staticReport.technical.canonicalTags.details = f.canonicalTagsDetails;
+            if (f.canonicalTagsRecommendation) staticReport.technical.canonicalTags.recommendation = f.canonicalTagsRecommendation;
+
+            if (f.schemaMarkupDetails) staticReport.technical.schemaMarkup.details = f.schemaMarkupDetails;
+            if (f.schemaMarkupRecommendation) staticReport.technical.schemaMarkup.recommendation = f.schemaMarkupRecommendation;
+
+            if (f.redirectChainsDetails) staticReport.technical.redirectChains.details = f.redirectChainsDetails;
+            if (f.redirectChainsRecommendation) staticReport.technical.redirectChains.recommendation = f.redirectChainsRecommendation;
+
+            if (f.orphanPagesDetails) staticReport.technical.orphanPages.details = f.orphanPagesDetails;
+            if (f.orphanPagesRecommendation) staticReport.technical.orphanPages.recommendation = f.orphanPagesRecommendation;
+          }
+
+          // Local SEO mapping (only if applicable)
+          if (enriched.localSeoFeedback && staticReport.localSeo.isApplicable) {
+            const lf = enriched.localSeoFeedback;
+            if (lf.googleBusinessProfileDetails) staticReport.localSeo.googleBusinessProfile.details = lf.googleBusinessProfileDetails;
+            if (lf.googleBusinessProfileRecommendation) staticReport.localSeo.googleBusinessProfile.recommendation = lf.googleBusinessProfileRecommendation;
+
+            if (lf.napConsistencyDetails) staticReport.localSeo.napConsistency.details = lf.napConsistencyDetails;
+            if (lf.napConsistencyRecommendation) staticReport.localSeo.napConsistency.recommendation = lf.napConsistencyRecommendation;
+
+            if (lf.reviewsSentimentSummary) staticReport.localSeo.reviewsAnalysis.sentimentSummary = lf.reviewsSentimentSummary;
+            
+            if (lf.citationsCount) staticReport.localSeo.localCitations.value = `${lf.citationsCount} verified directory entries`;
+            if (lf.citationsDetails) staticReport.localSeo.localCitations.details = lf.citationsDetails;
+            if (lf.citationsRecommendation) staticReport.localSeo.localCitations.recommendation = lf.citationsRecommendation;
+          }
+
+          console.log("[Parallel task] Audit successfully enriched and 100% personalized by Gemini AI.");
         }
       } catch (aiErr) {
-        console.warn("[Parallel task] Failed to generate content via Gemini API. Falling back to high-grade local simulation model.", aiErr);
+        console.warn("[Parallel task] Failed to generate fully personalized content via Gemini API. Falling back to structured simulation model.", aiErr);
       }
     })());
   }

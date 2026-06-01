@@ -6,8 +6,7 @@ import { OnPageSeoPanel } from './OnPageSeoPanel';
 import { CompetitorGapPanel } from './CompetitorGapPanel';
 import { LocalSeoPanel } from './LocalSeoPanel';
 import { AiRoadmapPanel } from './AiRoadmapPanel';
-import { AiOutreachScriptPanel } from './AiOutreachScriptPanel';
-import { FileText, Printer, ArrowLeft, Download, ShieldCheck, Sparkles, Globe, FileCheck } from 'lucide-react';
+import { FileText, Printer, ArrowLeft, Download, ShieldCheck, Sparkles, Globe } from 'lucide-react';
 
 interface PublicReportViewProps {
   report: WebsiteAuditReport;
@@ -268,15 +267,6 @@ export const PublicReportView: React.FC<PublicReportViewProps> = ({
               VI. Strategic Priority Remediation Blueprint
             </h3>
             <AiRoadmapPanel report={report} />
-          </div>
-
-          {/* Section: AI Outreach Cold Marketing script */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-xs space-y-6 no-print">
-            <h3 className="text-md font-bold font-display text-slate-900 border-b pb-3 flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-emerald-600" />
-              ✉ VII. Exclusive Cold Acquisition Outreach Script (AI Gen)
-            </h3>
-            <AiOutreachScriptPanel report={report} />
           </div>
 
         </div>
