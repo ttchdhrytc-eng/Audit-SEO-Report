@@ -865,19 +865,9 @@ function generateSimulationAudit(domain: string, companyName: string, type: 'Sta
 
 // Authentication and Session JWT Management Security Middleware
 const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized: Missing token" });
-  }
-
-  const token = authHeader.split(" ")[1];
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET!) as { role: string; sub?: string };
-    (req as any).user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });
-  }
+  // Always authorize with Admin role to keep the application fully open to all
+  (req as any).user = { role: "admin", sub: "admin_user" };
+  next();
 };
 
 const USER_PASSWORD = process.env.USER_PASSWORD || "user123";
@@ -885,10 +875,7 @@ const USER_PASSWORD = process.env.USER_PASSWORD || "user123";
 // Role authorization middleware helpers
 const requireRole = (allowedRoles: ("admin" | "user")[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as any).user;
-    if (!user || !user.role || !allowedRoles.includes(user.role)) {
-      return res.status(403).json({ error: `Forbidden: This action requires one of the following roles: ${allowedRoles.join(", ")}` });
-    }
+    // Always allowed in open-to-all mode
     next();
   };
 };
@@ -906,20 +893,9 @@ function auditLog(req: Request, endpoint: string, action: string, description: s
 
 // User & Admin Login Token Generation Endpoint
 app.post("/api/login", (req, res) => {
-  const { password } = req.body;
-  if (!password) {
-    return res.status(400).json({ error: "Password is required" });
-  }
-
-  if (password === ADMIN_PASSWORD) {
-    const token = jwt.sign({ role: "admin", sub: "admin_user" }, JWT_SECRET!, { expiresIn: "24h" });
-    res.json({ token, role: "admin" });
-  } else if (password === USER_PASSWORD) {
-    const token = jwt.sign({ role: "user", sub: "staff_user" }, JWT_SECRET!, { expiresIn: "24h" });
-    res.json({ token, role: "user" });
-  } else {
-    return res.status(401).json({ error: "Invalid password" });
-  }
+  // Always log in successfully as admin to make the app open to everyone
+  const token = jwt.sign({ role: "admin", sub: "admin_user" }, JWT_SECRET!, { expiresIn: "24h" });
+  res.json({ token, role: "admin" });
 });
 
 app.get("/api/leads", authMiddleware, requireRole(["admin", "user"]), (req, res) => {

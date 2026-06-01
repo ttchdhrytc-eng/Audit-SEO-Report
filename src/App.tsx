@@ -67,8 +67,8 @@ function getDecodedTokenPayload(token: string | null): any {
 }
 
 export default function App() {
-  // Administrative JWT Auth State
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => !!getAuthToken());
+  // Administrative JWT Auth State - Open to All
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(true);
   const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);

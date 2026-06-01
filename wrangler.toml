@@ -1,7 +1,7 @@
 # Revenue Clutch Audit Engine - Cloudflare Wrangler Configuration File
 # Declares entry points, compatibility dates, bindings, and environment configurations.
 
-name = "audit-seo-report"
+name = "revenue-clutch-api"
 main = "worker.js"
 compatibility_date = "2024-05-02"
 

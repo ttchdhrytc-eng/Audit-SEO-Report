@@ -193,26 +193,12 @@ export default {
       // 2. Routing System
       // ----------------- ADMIN LOGIN ENDPOINT -----------------
       if (path === "/api/login" && request.method === "POST") {
-        const body = await request.json();
-        const password = body.password;
-        if (!password) {
-          return jsonResponse({ error: "Password is required" }, corsHeaders, 400);
-        }
-        const adminPassword = env.ADMIN_PASSWORD || "admin123";
-        const userPassword = env.USER_PASSWORD || "user123";
         const jwtSecret = env.JWT_SECRET || "f8c4a8f1d2e9b7c3a5f6e1d9c7b4a8f2e6c9d1a3b5f7e8c2d4a6b9e1f3c7d5a";
-
         const exp = Math.floor(Date.now() / 1000) + 86400;
 
-        if (password === adminPassword) {
-          const token = await signJwt({ role: "admin", sub: "admin_user", exp }, jwtSecret);
-          return jsonResponse({ token, role: "admin" }, corsHeaders);
-        } else if (password === userPassword) {
-          const token = await signJwt({ role: "user", sub: "staff_user", exp }, jwtSecret);
-          return jsonResponse({ token, role: "user" }, corsHeaders);
-        } else {
-          return jsonResponse({ error: "Invalid password" }, corsHeaders, 401);
-        }
+        // In open-to-all mode, any login attempt succeeds as Admin automatically
+        const token = await signJwt({ role: "admin", sub: "admin_user", exp }, jwtSecret);
+        return jsonResponse({ token, role: "admin" }, corsHeaders);
       }
 
       // ----------------- ROOT / HEALTH CHECK -----------------
@@ -1433,12 +1419,6 @@ async function signJwt(payload, secret) {
 }
 
 async function checkAuth(request, env) {
-  const jwtSecret = env.JWT_SECRET || "f8c4a8f1d2e9b7c3a5f6e1d9c7b4a8f2e6c9d1a3b5f7e8c2d4a6b9e1f3c7d5a";
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return false;
-  }
-  const token = authHeader.split(" ")[1];
-  const payload = await verifyJwt(token, jwtSecret);
-  return payload || false;
+  // Always authorize with Admin credentials to make it open to everyone
+  return { role: "admin", sub: "admin_user" };
 }
