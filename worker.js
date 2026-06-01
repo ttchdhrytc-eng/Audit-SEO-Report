@@ -252,18 +252,22 @@ export default {
 
         // Save report to D1 Database if it exists
         if (env.DB) {
-          await env.DB.prepare(
-            `INSERT OR REPLACE INTO audits (id, domain, company_name, audit_type, overall_score, report_json, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`
-          ).bind(
-            report.id,
-            cleanDomain,
-            report.companyName,
-            report.auditType,
-            report.overallScore,
-            JSON.stringify(report),
-            new Date().toISOString()
-          ).run();
+          try {
+            await env.DB.prepare(
+              `INSERT OR REPLACE INTO audits (id, domain, company_name, audit_type, overall_score, report_json, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`
+            ).bind(
+              report.id,
+              cleanDomain,
+              report.companyName,
+              report.auditType,
+              report.overallScore,
+              JSON.stringify(report),
+              new Date().toISOString()
+            ).run();
+          } catch (dbErr) {
+            console.error("Database INSERT audits failed:", dbErr);
+          }
         }
 
         return jsonResponse(report, corsHeaders);
@@ -286,12 +290,16 @@ export default {
         }
 
         if (env.DB) {
-          const row = await env.DB.prepare(
-            "SELECT report_json FROM audits WHERE domain = ? ORDER BY created_at DESC LIMIT 1"
-          ).bind(cleanDomain).first();
+          try {
+            const row = await env.DB.prepare(
+              "SELECT report_json FROM audits WHERE domain = ? ORDER BY created_at DESC LIMIT 1"
+            ).bind(cleanDomain).first();
 
-          if (row && row.report_json) {
-            return jsonResponse(JSON.parse(row.report_json), corsHeaders);
+            if (row && row.report_json) {
+              return jsonResponse(JSON.parse(row.report_json), corsHeaders);
+            }
+          } catch (dbErr) {
+            console.error("Database SELECT report_json failed:", dbErr);
           }
         }
 
@@ -303,19 +311,23 @@ export default {
       // ----------------- LIST RECENT AUDITS -----------------
       if (path === "/api/audited-list" && request.method === "GET") {
         if (env.DB) {
-          const { results } = await env.DB.prepare(
-            "SELECT id, domain, company_name, audit_type, overall_score, created_at FROM audits ORDER BY created_at DESC LIMIT 30"
-          ).all();
+          try {
+            const { results } = await env.DB.prepare(
+              "SELECT id, domain, company_name, audit_type, overall_score, created_at FROM audits ORDER BY created_at DESC LIMIT 30"
+            ).all();
 
-          const formatted = results.map(row => ({
-            id: row.id,
-            domain: row.domain,
-            companyName: row.company_name,
-            auditType: row.audit_type,
-            overallScore: row.overall_score,
-            generatedAt: row.created_at || new Date().toISOString()
-          }));
-          return jsonResponse(formatted, corsHeaders);
+            const formatted = results.map(row => ({
+              id: row.id,
+              domain: row.domain,
+              companyName: row.company_name,
+              auditType: row.audit_type,
+              overallScore: row.overall_score,
+              generatedAt: row.created_at || new Date().toISOString()
+            }));
+            return jsonResponse(formatted, corsHeaders);
+          } catch (dbErr) {
+            console.error("Database SELECT audits failed:", dbErr);
+          }
         }
 
         // Default local response if database is unprovisioned
@@ -334,20 +346,24 @@ export default {
           const dateNow = new Date().toISOString();
 
           if (env.DB) {
-            await env.DB.prepare(
-              `INSERT INTO leads (id, name, email, website, company, phone, status, notes, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ).bind(
-              leadId,
-              leadData.name || "",
-              leadData.email || "",
-              leadData.website || "",
-              leadData.company || "",
-              leadData.phone || "",
-              leadData.status || "New",
-              leadData.notes || "",
-              dateNow
-            ).run();
+            try {
+              await env.DB.prepare(
+                `INSERT INTO leads (id, name, email, website, company, phone, status, notes, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              ).bind(
+                leadId,
+                leadData.name || "",
+                leadData.email || "",
+                leadData.website || "",
+                leadData.company || "",
+                leadData.phone || "",
+                leadData.status || "New",
+                leadData.notes || "",
+                dateNow
+              ).run();
+            } catch (dbErr) {
+              console.error("Database INSERT leads failed:", dbErr);
+            }
           }
 
           auditLog(request, payload, "POST /api/leads", "CREATE_LEAD", `Inserting new CRM registry: ${leadData.name || 'Anonymous'} (${leadData.email || 'N/A'})`);
@@ -371,18 +387,22 @@ export default {
           }
           let list = [];
           if (env.DB) {
-            const { results } = await env.DB.prepare("SELECT * FROM leads ORDER BY created_at DESC").all();
-            list = results.map(row => ({
-              id: row.id,
-              name: row.name,
-              email: row.email,
-              website: row.website,
-              company: row.company,
-              phone: row.phone,
-              status: row.status,
-              notes: row.notes,
-              dateCaptured: row.created_at
-            }));
+            try {
+              const { results } = await env.DB.prepare("SELECT * FROM leads ORDER BY created_at DESC").all();
+              list = results.map(row => ({
+                id: row.id,
+                name: row.name,
+                email: row.email,
+                website: row.website,
+                company: row.company,
+                phone: row.phone,
+                status: row.status,
+                notes: row.notes,
+                dateCaptured: row.created_at
+              }));
+            } catch (dbErr) {
+              console.error("Database SELECT leads failed:", dbErr);
+            }
           }
           auditLog(request, payload, "GET /api/leads", "READ_ALL_LEADS", `Exposing complete CRM database list. Record count: ${list.length}`);
           return jsonResponse(list, corsHeaders);
@@ -401,18 +421,22 @@ export default {
 
         let list = [];
         if (env.DB) {
-          const { results } = await env.DB.prepare("SELECT * FROM leads ORDER BY created_at DESC").all();
-          list = results.map(row => ({
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            website: row.website,
-            company: row.company,
-            phone: row.phone,
-            status: row.status,
-            notes: row.notes,
-            dateCaptured: row.created_at
-          }));
+          try {
+            const { results } = await env.DB.prepare("SELECT * FROM leads ORDER BY created_at DESC").all();
+            list = results.map(row => ({
+              id: row.id,
+              name: row.name,
+              email: row.email,
+              website: row.website,
+              company: row.company,
+              phone: row.phone,
+              status: row.status,
+              notes: row.notes,
+              dateCaptured: row.created_at
+            }));
+          } catch (dbErr) {
+            console.error("Database SELECT leads for export failed:", dbErr);
+          }
         }
 
         auditLog(request, payload, "GET /api/leads/export", "EXPORT_ALL_LEADS", `Generating worker CSV export for leads. Count: ${list.length}`);
@@ -460,7 +484,11 @@ export default {
         if (request.method === "DELETE") {
           auditLog(request, payload, `DELETE /api/leads/${leadId}`, "DELETE_LEAD", `Permanently destroying customer lead registry.`);
           if (env.DB) {
-            await env.DB.prepare("DELETE FROM leads WHERE id = ?").bind(leadId).run();
+            try {
+              await env.DB.prepare("DELETE FROM leads WHERE id = ?").bind(leadId).run();
+            } catch (dbErr) {
+              console.error("Database DELETE lead failed:", dbErr);
+            }
           }
           return jsonResponse({ success: true }, corsHeaders);
         }
@@ -469,26 +497,34 @@ export default {
           const bodyData = await request.json();
           auditLog(request, payload, `PUT /api/leads/${leadId}`, "UPDATE_LEAD", `Modifying lead parameters. Status: ${bodyData.status || 'N/A'}`);
           if (env.DB) {
-            await env.DB.prepare(
-              "UPDATE leads SET status = ?, notes = ? WHERE id = ?"
-            ).bind(bodyData.status || "New", bodyData.notes || "", leadId).run();
+            try {
+              await env.DB.prepare(
+                "UPDATE leads SET status = ?, notes = ? WHERE id = ?"
+              ).bind(bodyData.status || "New", bodyData.notes || "", leadId).run();
+            } catch (dbErr) {
+              console.error("Database UPDATE lead failed:", dbErr);
+            }
           }
 
           let updatedLead = { id: leadId, status: bodyData.status || "New", notes: bodyData.notes || "" };
           if (env.DB) {
-            const row = await env.DB.prepare("SELECT * FROM leads WHERE id = ?").bind(leadId).first();
-            if (row) {
-              updatedLead = {
-                id: row.id,
-                name: row.name,
-                email: row.email,
-                website: row.website,
-                company: row.company,
-                phone: row.phone,
-                status: row.status,
-                notes: row.notes,
-                dateCaptured: row.created_at
-              };
+            try {
+              const row = await env.DB.prepare("SELECT * FROM leads WHERE id = ?").bind(leadId).first();
+              if (row) {
+                updatedLead = {
+                  id: row.id,
+                  name: row.name,
+                  email: row.email,
+                  website: row.website,
+                  company: row.company,
+                  phone: row.phone,
+                  status: row.status,
+                  notes: row.notes,
+                  dateCaptured: row.created_at
+                };
+              }
+            } catch (dbErr) {
+              console.error("Database SELECT lead details failed:", dbErr);
             }
           }
           return jsonResponse(updatedLead, corsHeaders);
@@ -511,21 +547,25 @@ export default {
 
         // Initialize queue rows in D1
         if (env.DB) {
-          await env.DB.prepare(
-            `INSERT INTO bulk_jobs (id, name, total_urls, processed_count, status, created_at)
-             VALUES (?, ?, ?, 0, 'queued', ?)`
-          ).bind(jobId, jobName, urls.length, dateNow).run();
-
-          for (const itemUrl of urls) {
-            const queueId = crypto.randomUUID();
+          try {
             await env.DB.prepare(
-              `INSERT INTO bulk_queue (id, job_id, url, status, progress, created_at)
-               VALUES (?, ?, ?, 'queued', 0, ?)`
-            ).bind(queueId, jobId, itemUrl, dateNow).run();
-          }
+              `INSERT INTO bulk_jobs (id, name, total_urls, processed_count, status, created_at)
+               VALUES (?, ?, ?, 0, 'queued', ?)`
+            ).bind(jobId, jobName, urls.length, dateNow).run();
 
-          // Trigger asynchronous crawl engine in background (Workers Event Loop)
-          ctx.waitUntil(processBulkJobInBackground(jobId, urls, env));
+            for (const itemUrl of urls) {
+              const queueId = crypto.randomUUID();
+              await env.DB.prepare(
+                `INSERT INTO bulk_queue (id, job_id, url, status, progress, created_at)
+                 VALUES (?, ?, ?, 'queued', 0, ?)`
+              ).bind(queueId, jobId, itemUrl, dateNow).run();
+            }
+
+            // Trigger asynchronous crawl engine in background (Workers Event Loop)
+            ctx.waitUntil(processBulkJobInBackground(jobId, urls, env));
+          } catch (dbErr) {
+            console.error("Database batch queue creation failed:", dbErr);
+          }
         }
 
         return jsonResponse({ success: true, id: jobId, message: "Campaign created successfully" }, corsHeaders);
@@ -537,18 +577,22 @@ export default {
           return jsonResponse({ error: "Unauthorized" }, corsHeaders, 401);
         }
         if (env.DB) {
-          const { results } = await env.DB.prepare(
-            "SELECT * FROM bulk_jobs ORDER BY created_at DESC"
-          ).all();
-          const items = results.map(row => ({
-            id: row.id,
-            name: row.name,
-            totalUrls: row.total_urls,
-            processedCount: row.processed_count,
-            status: row.status,
-            createdAt: row.created_at
-          }));
-          return jsonResponse(items, corsHeaders);
+          try {
+            const { results } = await env.DB.prepare(
+              "SELECT * FROM bulk_jobs ORDER BY created_at DESC"
+            ).all();
+            const items = results.map(row => ({
+              id: row.id,
+              name: row.name,
+              totalUrls: row.total_urls,
+              processedCount: row.processed_count,
+              status: row.status,
+              createdAt: row.created_at
+            }));
+            return jsonResponse(items, corsHeaders);
+          } catch (dbErr) {
+            console.error("Database SELECT bulk_jobs failed:", dbErr);
+          }
         }
         return jsonResponse([], corsHeaders);
       }
@@ -566,22 +610,26 @@ export default {
         let jobInfo = { id: jobId, name: "", totalUrls: 0, processedCount: 0, status: "completed", items: [] };
 
         if (env.DB) {
-          const metadata = await env.DB.prepare("SELECT * FROM bulk_jobs WHERE id = ?").bind(jobId).first();
-          if (metadata) {
-            jobInfo.name = metadata.name;
-            jobInfo.totalUrls = metadata.total_urls;
-            jobInfo.processedCount = metadata.processed_count;
-            jobInfo.status = metadata.status;
-          }
+          try {
+            const metadata = await env.DB.prepare("SELECT * FROM bulk_jobs WHERE id = ?").bind(jobId).first();
+            if (metadata) {
+              jobInfo.name = metadata.name;
+              jobInfo.totalUrls = metadata.total_urls;
+              jobInfo.processedCount = metadata.processed_count;
+              jobInfo.status = metadata.status;
+            }
 
-          const { results } = await env.DB.prepare("SELECT * FROM bulk_queue WHERE job_id = ?").bind(jobId).all();
-          jobInfo.items = results.map(row => ({
-            id: row.id,
-            url: row.url,
-            status: row.status,
-            progress: row.progress,
-            score: row.score || null
-          }));
+            const { results } = await env.DB.prepare("SELECT * FROM bulk_queue WHERE job_id = ?").bind(jobId).all();
+            jobInfo.items = results.map(row => ({
+              id: row.id,
+              url: row.url,
+              status: row.status,
+              progress: row.progress,
+              score: row.score || null
+            }));
+          } catch (dbErr) {
+            console.error("Database SELECT bulk_queue failed:", dbErr);
+          }
         }
 
         return jsonResponse(jobInfo, corsHeaders);
