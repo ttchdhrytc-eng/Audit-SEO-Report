@@ -27,7 +27,7 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   
   if (origin) {
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
       res.header("Access-Control-Allow-Origin", origin);
     } else {
       res.status(403).json({ error: "Forbidden: Origin not whitelisted by CORS policy." });
@@ -1013,20 +1013,21 @@ app.delete("/api/leads/:id", authMiddleware, requireRole(["admin"]), (req, res) 
 
 // Single Website Audit Endpoint (Backed by Gemini AI for rich Copywriting)
 app.post("/api/audit", async (req, res) => {
-  const { url, companyName, auditType } = req.body;
+  const { url, domain, companyName, auditType } = req.body;
+  const targetUrl = url || domain;
   
-  if (!url) {
+  if (!targetUrl) {
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
-  const safetyCheck = await validateUrlAndResolveSafe(url);
+  const safetyCheck = await validateUrlAndResolveSafe(targetUrl);
   if (!safetyCheck.safe) {
     return res.status(400).json({ error: `Rejected unsafe URL: ${safetyCheck.error}` });
   }
 
   const executionTasks: Promise<void>[] = [];
 
-  const cleanUrl = cleanDomainName(url);
+  const cleanUrl = cleanDomainName(targetUrl);
   const domainShortName = cleanUrl.split('.')[0];
   const formattedCompany = companyName || domainShortName.charAt(0).toUpperCase() + domainShortName.slice(1);
   const typeOfAudit = auditType || 'Standard';

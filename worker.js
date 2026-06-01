@@ -170,7 +170,7 @@ export default {
     };
 
     if (origin) {
-      if (allowedOrigins.includes(origin)) {
+      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
         corsHeaders["Access-Control-Allow-Origin"] = origin;
       } else {
         return new Response(JSON.stringify({ error: "Forbidden: Origin not whitelisted by CORS policy." }), {
@@ -230,14 +230,15 @@ export default {
       // ----------------- STANDARD SINGLE WEBSITE AUDIT -----------------
       if (path === "/api/audit" && request.method === "POST") {
         const body = await request.json();
-        const { domain, companyName, auditType = "Standard" } = body;
+        const { domain, url, companyName, auditType = "Standard" } = body;
+        const targetDomain = domain || url;
 
-        if (!domain) {
-          return jsonResponse({ error: "No domain provided" }, corsHeaders, 400);
+        if (!targetDomain) {
+          return jsonResponse({ error: "No domain or url provided" }, corsHeaders, 400);
         }
 
         // Clean domain name representation
-        let cleanDomain = domain.trim().toLowerCase();
+        let cleanDomain = targetDomain.trim().toLowerCase();
         cleanDomain = cleanDomain.replace(/^(https?:\/\/)?(www\.)?/, "");
         cleanDomain = cleanDomain.split("/")[0];
 
