@@ -1,4 +1,4 @@
-# Revenue Clutch Audit Engine - Cloudflare Wrangler Configuration File
+# Audit SEO report - Cloudflare Wrangler Configuration File
 # Declares entry points, compatibility dates, bindings, and environment configurations.
 
 name = "audit-seo-report"
