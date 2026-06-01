@@ -8,7 +8,7 @@ compatibility_date = "2024-05-02"
 # Production Route configuration variables & triggers
 [vars]
 # Domain where your vanilla SPA is hosted (e.g. Cloudflare Pages output URL)
-FRONTEND_CLIENT_URL = "https://audit-seo-report.t-tchdhry-tc.workers.dev"
+FRONTEND_CLIENT_URL = "https://audit-seo-report.pages.dev"
 
 # Google Search Console OAuth Configurations
 GSC_REDIRECT_URI = "https://audit-seo-report.t-tchdhry-tc.workers.dev/api/oauth/callback"
