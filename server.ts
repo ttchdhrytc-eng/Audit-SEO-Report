@@ -60,7 +60,7 @@ if (!OPENGRAPH_API_KEY) {
   console.warn("WARNING: OPENGRAPH_API_KEY environment variable is not configured.");
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-13579-24680";
+const JWT_SECRET = process.env.JWT_SECRET || "f8c4a8f1d2e9b7c3a5f6e1d9c7b4a8f2e6c9d1a3b5f7e8c2d4a6b9e1f3c7d5a";
 if (!process.env.JWT_SECRET) {
   console.warn("WARNING: JWT_SECRET environment variable is not configured. Falling back to default.");
 }
