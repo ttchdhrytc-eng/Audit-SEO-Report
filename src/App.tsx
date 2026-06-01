@@ -20,7 +20,7 @@ import { AiOutreachScriptPanel } from './components/AiOutreachScriptPanel';
 import { GoogleSearchConsolePanel } from './components/GoogleSearchConsolePanel';
 import { PublicReportView } from './components/PublicReportView';
 import { AiKeywordStrategistPanel } from './components/AiKeywordStrategistPanel';
-import { getApiUrl, getAuthHeaders, setAuthToken, getAuthToken } from './utils/api';
+import { getApiUrl, getAuthHeaders, setAuthToken, getAuthToken, safeLocalStorage } from './utils/api';
 import {   Building2, 
   Search, 
   ListOrdered, 
@@ -78,6 +78,11 @@ export default function App() {
   
   // Scanned Audits State
   const [scannedAudits, setScannedAudits] = useState<WebsiteAuditReport[]>([]);
+  const scannedAuditsRef = React.useRef(scannedAudits);
+  useEffect(() => {
+    scannedAuditsRef.current = scannedAudits;
+  }, [scannedAudits]);
+
   const [selectedAuditId, setSelectedAuditId] = useState<string>('');
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanProgress, setScanProgress] = useState<number>(0);
@@ -126,7 +131,7 @@ export default function App() {
   // White-Label Settings parameters
   const [whiteLabelSettings, setWhiteLabelSettings] = useState(() => {
     try {
-      const saved = localStorage.getItem('SEO_SUITE_WHITE_LABEL_SETTINGS');
+      const saved = safeLocalStorage.getItem('SEO_SUITE_WHITE_LABEL_SETTINGS');
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
@@ -155,7 +160,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('SEO_SUITE_WHITE_LABEL_SETTINGS', JSON.stringify(whiteLabelSettings));
+      safeLocalStorage.setItem('SEO_SUITE_WHITE_LABEL_SETTINGS', JSON.stringify(whiteLabelSettings));
     } catch (e) {
       console.warn("Could not persist setting overrides:", e);
     }
@@ -189,7 +194,7 @@ export default function App() {
       }
       if (event.data?.type === 'GOOGLE_OAUTH_SUCCESS') {
         const token = event.data.token;
-        localStorage.setItem('google_gsc_token', token);
+        safeLocalStorage.setItem('google_gsc_token', token);
         // Alert other listening components to fetch new tokens automatically
         window.dispatchEvent(new CustomEvent('gsc_token_updated', { detail: token }));
       }
@@ -220,7 +225,7 @@ export default function App() {
   // Synchronously auto-fetch full audit report if focus state lacks detailed metrics
   useEffect(() => {
     if (!selectedAuditId) return;
-    const current = scannedAudits.find(aud => aud.domain === selectedAuditId);
+    const current = scannedAuditsRef.current.find(aud => aud.domain === selectedAuditId);
     if (current && !current.technical) {
       fetch(getApiUrl(`/api/audit/${selectedAuditId}`))
         .then(res => {
@@ -241,7 +246,7 @@ export default function App() {
           console.warn("Could not retrieve full detailed metrics on demand", err);
         });
     }
-  }, [selectedAuditId, scannedAudits]);
+  }, [selectedAuditId]);
 
   // Submit Admin Password to Login
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
@@ -331,11 +336,15 @@ export default function App() {
     try {
       const res = await fetch(getApiUrl('/api/audited-list'));
       const data = await res.json();
-      setScannedAudits(data);
-      if (targetToSelect) {
-        setSelectedAuditId(targetToSelect);
-      } else if (data.length > 0 && !selectedAuditId) {
-        setSelectedAuditId(data[0].domain);
+      if (Array.isArray(data)) {
+        setScannedAudits(data);
+        if (targetToSelect) {
+          setSelectedAuditId(targetToSelect);
+        } else if (data.length > 0 && !selectedAuditId) {
+          setSelectedAuditId(data[0].domain);
+        }
+      } else {
+        console.error("fetchAuditedList returned non-array payload:", data);
       }
     } catch (e) {
       console.error("Could not fetch audited websites list", e);
@@ -352,7 +361,11 @@ export default function App() {
         return;
       }
       const data = await res.json();
-      setCrmLeads(data);
+      if (Array.isArray(data)) {
+        setCrmLeads(data);
+      } else {
+        console.error("fetchLeadsList returned non-array payload:", data);
+      }
     } catch (e) {
       console.error("Could not fetch CRM leads", e);
     }
@@ -368,17 +381,21 @@ export default function App() {
         return;
       }
       const data = await res.json();
-      setBulkJobs(data);
-      if (data.length > 0 && !selectedJob) {
-        const detailRes = await fetch(getApiUrl(`/api/bulk-audit/${data[0].id}`), {
-          headers: getAuthHeaders()
-        });
-        if (detailRes.status === 401) {
-          setIsAdminAuthenticated(false);
-          return;
+      if (Array.isArray(data)) {
+        setBulkJobs(data);
+        if (data.length > 0 && !selectedJob) {
+          const detailRes = await fetch(getApiUrl(`/api/bulk-audit/${data[0].id}`), {
+            headers: getAuthHeaders()
+          });
+          if (detailRes.status === 401) {
+            setIsAdminAuthenticated(false);
+            return;
+          }
+          const detailData = await detailRes.json();
+          setSelectedJob(detailData);
         }
-        const detailData = await detailRes.json();
-        setSelectedJob(detailData);
+      } else {
+        console.error("fetchBulkCampaigns returned non-array payload:", data);
       }
     } catch (e) {
       console.warn("Could not retrieve bulk jobs:", e);

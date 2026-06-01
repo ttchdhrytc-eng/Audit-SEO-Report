@@ -1,6 +1,54 @@
+const memoryStore: Record<string, string> = {};
+
+function isLocalStorageAvailable(): boolean {
+  try {
+    const testKey = '__test_storage__';
+    window.localStorage.setItem(testKey, testKey);
+    window.localStorage.removeItem(testKey);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export const safeLocalStorage = {
+  getItem(key: string): string | null {
+    try {
+      if (isLocalStorageAvailable()) {
+        return window.localStorage.getItem(key);
+      }
+    } catch (e) {
+      console.warn("Storage item fetch blocked:", e);
+    }
+    return memoryStore[key] !== undefined ? memoryStore[key] : null;
+  },
+  setItem(key: string, value: string): void {
+    try {
+      if (isLocalStorageAvailable()) {
+        window.localStorage.setItem(key, value);
+        return;
+      }
+    } catch (e) {
+      console.warn("Storage item save blocked:", e);
+    }
+    memoryStore[key] = String(value);
+  },
+  removeItem(key: string): void {
+    try {
+      if (isLocalStorageAvailable()) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+    } catch (e) {
+      console.warn("Storage item remove blocked:", e);
+    }
+    delete memoryStore[key];
+  }
+};
+
 export function getApiUrl(path: string): string {
   try {
-    const savedSettings = localStorage.getItem('SEO_SUITE_WHITE_LABEL_SETTINGS');
+    const savedSettings = safeLocalStorage.getItem('SEO_SUITE_WHITE_LABEL_SETTINGS');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
       if (parsed.apiBaseUrl && parsed.apiBaseUrl.trim()) {
@@ -34,6 +82,13 @@ export function getApiUrl(path: string): string {
       return path;
     }
 
+    // If accessed on Cloudflare Pages (e.g. audit-seo-report.pages.dev), target the corresponding worker
+    if (hostname.endsWith(".pages.dev")) {
+      const prefix = hostname.split('.')[0];
+      const cleanPath = path.replace(/^\/+/, '');
+      return `https://${prefix}.t-tchdhry-tc.workers.dev/${cleanPath}`;
+    }
+
     // Browsing the dev server directly uses relative endpoints
     if (hostname === "ais-dev-jh73tlf3ma53ancchisqut-234509423251.asia-southeast1.run.app") {
       return path;
@@ -49,14 +104,14 @@ export function getApiUrl(path: string): string {
 }
 
 export function getAuthToken(): string | null {
-  return localStorage.getItem('revenue_clutch_jwt_token');
+  return safeLocalStorage.getItem('revenue_clutch_jwt_token');
 }
 
 export function setAuthToken(token: string | null): void {
   if (token) {
-    localStorage.setItem('revenue_clutch_jwt_token', token);
+    safeLocalStorage.setItem('revenue_clutch_jwt_token', token);
   } else {
-    localStorage.removeItem('revenue_clutch_jwt_token');
+    safeLocalStorage.removeItem('revenue_clutch_jwt_token');
   }
 }
 

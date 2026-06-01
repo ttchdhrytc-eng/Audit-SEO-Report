@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { safeLocalStorage } from '../utils/api';
 import { WebsiteAuditReport } from '../types';
 import { 
   TrendingUp, 
@@ -60,7 +61,7 @@ interface GscPageRow {
 }
 
 export const GoogleSearchConsolePanel: React.FC<GoogleSearchConsolePanelProps> = ({ report }) => {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('google_gsc_token'));
+  const [token, setToken] = useState<string | null>(safeLocalStorage.getItem('google_gsc_token'));
   const [sites, setSites] = useState<string[]>([]);
   const [selectedSite, setSelectedSite] = useState<string | null>(null);
   const [dailyData, setDailyData] = useState<GscDataPoint[]>([]);
@@ -68,7 +69,7 @@ export const GoogleSearchConsolePanel: React.FC<GoogleSearchConsolePanelProps> =
   const [pages, setPages] = useState<GscPageRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDemo, setIsDemo] = useState<boolean>(!localStorage.getItem('google_gsc_token'));
+  const [isDemo, setIsDemo] = useState<boolean>(!safeLocalStorage.getItem('google_gsc_token'));
 
   // Extract a clean domain name for display and matching
   const cleanDomain = report.domain
@@ -112,7 +113,7 @@ export const GoogleSearchConsolePanel: React.FC<GoogleSearchConsolePanelProps> =
 
   // Disconnect Google Account
   const handleDisconnect = () => {
-    localStorage.removeItem('google_gsc_token');
+    safeLocalStorage.removeItem('google_gsc_token');
     setToken(null);
     setSites([]);
     setSelectedSite(null);

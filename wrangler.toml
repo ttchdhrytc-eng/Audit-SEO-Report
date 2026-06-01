@@ -18,4 +18,4 @@ GSC_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
 [[d1_databases]]
 binding = "DB"
 database_name = "revenue-clutch-db"
-database_id = "your-d1-database-uuid-from-dashboard"
+database_id = "ff8c1ebe-1523-4b1c-a09c-08e6e023b907"
