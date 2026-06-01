@@ -1,7 +1,7 @@
 # Revenue Clutch Audit Engine - Cloudflare Wrangler Configuration File
 # Declares entry points, compatibility dates, bindings, and environment configurations.
 
-name = "audit-seo-report"
+name = "revenue-clutch-api"
 main = "worker.js"
 compatibility_date = "2024-05-02"
 
@@ -17,5 +17,5 @@ GSC_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
 # Bindings to D1 Database inside Cloudflare accounts
 [[d1_databases]]
 binding = "DB"
-database_name = "audit-db"
-database_id = "0ef97853-5e88-46a0-9924-2f8b19a9ecea"
+database_name = "revenue-clutch-db"
+database_id = "your-d1-database-uuid-from-dashboard"
