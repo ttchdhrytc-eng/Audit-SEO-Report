@@ -4,6 +4,9 @@ export interface SeoMetric {
   value?: string;
   details: string;
   recommendation: string;
+  sourceApi?: string;
+  originalField?: string;
+  isLive?: boolean;
 }
 
 export interface TechnicalAudit {
@@ -19,10 +22,13 @@ export interface TechnicalAudit {
   orphanPages: SeoMetric;
   coreWebVitals: {
     score: number;
-    lcp: { value: string; rating: 'good' | 'needs-improvement' | 'poor' };
-    cls: { value: string; rating: 'good' | 'needs-improvement' | 'poor' };
-    inp: { value: string; rating: 'good' | 'needs-improvement' | 'poor' };
-    ttfb: { value: string; rating: 'good' | 'needs-improvement' | 'poor' };
+    scoreSource?: string;
+    scoreField?: string;
+    scoreIsLive?: boolean;
+    lcp: { value: string; rating: 'good' | 'needs-improvement' | 'poor'; sourceApi?: string; originalField?: string; isLive?: boolean };
+    cls: { value: string; rating: 'good' | 'needs-improvement' | 'poor'; sourceApi?: string; originalField?: string; isLive?: boolean };
+    inp: { value: string; rating: 'good' | 'needs-improvement' | 'poor'; sourceApi?: string; originalField?: string; isLive?: boolean };
+    ttfb: { value: string; rating: 'good' | 'needs-improvement' | 'poor'; sourceApi?: string; originalField?: string; isLive?: boolean };
     imageOptimization: SeoMetric;
     renderBlocking: SeoMetric;
   };
@@ -42,6 +48,9 @@ export interface OnPageAudit {
   contentScore: {
     value: string;
     details: string;
+    sourceApi?: string;
+    originalField?: string;
+    isLive?: boolean;
   };
   keywordDensity: {
     keyword: string;
@@ -52,10 +61,16 @@ export interface OnPageAudit {
   readabilityScore: {
     value: string;
     details: string;
+    sourceApi?: string;
+    originalField?: string;
+    isLive?: boolean;
   };
   nlpRelevance: {
     value: string;
     details: string;
+    sourceApi?: string;
+    originalField?: string;
+    isLive?: boolean;
   };
   eeatSignals: SeoMetric;
   semanticKeywords: {
@@ -67,36 +82,54 @@ export interface OnPageAudit {
 
 export interface CompetitorAudit {
   overallScore: number;
+  scoreSource?: string;
+  scoreField?: string;
+  scoreIsLive?: boolean;
   competitors: {
     domain: string;
-    authority: number;
-    backlinks: number;
-    referringDomains: number;
+    authority: number | string;
+    backlinks: number | string;
+    referringDomains: number | string;
     trafficValue: string;
-    rankingKeywords: number;
-    overlapKeywords: number;
+    rankingKeywords: number | string;
+    overlapKeywords: number | string;
+    isLive?: boolean;
+    sourceApi?: string;
+    originalField?: string;
   }[];
   keywordGaps: {
     keyword: string;
-    volume: number;
-    difficulty: number;
-    competitorRank: number;
-    ourRank: number | 'Not Ranking';
-    opportunityValue: 'Critical' | 'High' | 'Medium';
+    volume: number | string;
+    difficulty: number | string;
+    competitorRank: number | string;
+    ourRank: number | 'Not Ranking' | string;
+    opportunityValue: 'Critical' | 'High' | 'Medium' | string;
+    isLive?: boolean;
+    sourceApi?: string;
+    originalField?: string;
   }[];
 }
 
 export interface LocalSeoAudit {
   overallScore: number;
+  scoreSource?: string;
+  scoreField?: string;
+  scoreIsLive?: boolean;
   isApplicable: boolean;
   googleBusinessProfile: SeoMetric;
   napConsistency: SeoMetric;
   localCitations: SeoMetric;
   reviewsAnalysis: {
-    totalReviews: number;
-    averageRating: number;
+    totalReviews: number | string;
+    averageRating: number | string;
     sentimentSummary: string;
     status: 'passed' | 'warning' | 'failed';
+    totalReviewsSource?: string;
+    totalReviewsField?: string;
+    totalReviewsIsLive?: boolean;
+    averageRatingSource?: string;
+    averageRatingField?: string;
+    averageRatingIsLive?: boolean;
   };
 }
 

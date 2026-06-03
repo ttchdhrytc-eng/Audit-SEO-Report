@@ -86,20 +86,20 @@ export const CompetitorGapPanel: React.FC<CompetitorGapPanelProps> = ({ report }
                   <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
                   <span className="font-semibold text-indigo-700 dark:text-indigo-400">{report.domain} (You)</span>
                 </td>
-                <td className="px-4 py-3.5 text-center font-bold font-mono">
-                  {Math.round(competitors.overallScore * 0.72)}
+                <td className="px-4 py-3.5 text-center font-bold font-mono text-slate-500 dark:text-slate-400">
+                  Data Unavailable
                 </td>
-                <td className="px-4 py-3.5 text-center text-slate-700 dark:text-slate-300 font-mono">
-                  150
+                <td className="px-4 py-3.5 text-center text-slate-500 dark:text-slate-400 font-mono">
+                  Data Unavailable
                 </td>
-                <td className="px-4 py-3.5 text-center text-slate-700 dark:text-slate-300 font-mono">
-                  38
+                <td className="px-4 py-3.5 text-center text-slate-500 dark:text-slate-400 font-mono">
+                  Data Unavailable
                 </td>
-                <td className="px-4 py-3.5 text-center text-emerald-600 font-bold font-mono">
-                  $340 /mo
+                <td className="px-4 py-3.5 text-center text-slate-500 dark:text-slate-400 font-bold font-mono">
+                  Data Unavailable
                 </td>
-                <td className="px-4 py-3.5 text-center text-slate-700 dark:text-slate-300 font-mono">
-                  84
+                <td className="px-4 py-3.5 text-center text-slate-500 dark:text-slate-400 font-mono">
+                  Data Unavailable
                 </td>
                 <td className="px-4 py-3.5 text-center text-slate-400 font-mono">
                   -
@@ -135,6 +135,10 @@ export const CompetitorGapPanel: React.FC<CompetitorGapPanelProps> = ({ report }
 
             </tbody>
           </table>
+        </div>
+        <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500 pt-1 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 border-t border-slate-50 dark:border-slate-800/40">
+          <span>Source: <span className="font-semibold">{competitors.scoreSource || "N/A (Backlink API Integration Required)"}</span></span>
+          <span>Field: <span className="font-semibold">{competitors.scoreField || "backlinks_audit_record"}</span></span>
         </div>
       </div>
 

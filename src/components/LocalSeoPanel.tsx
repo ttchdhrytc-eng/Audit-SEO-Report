@@ -108,11 +108,14 @@ export const LocalSeoPanel: React.FC<LocalSeoPanelProps> = ({ report }) => {
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
                 {localSeo.googleBusinessProfile.details}
               </p>
-              <div className="border-t border-slate-50 pt-2.5">
+              <div className="border-t border-slate-50 pt-2.5 space-y-1">
                 <span className="block text-[9px] font-mono uppercase text-indigo-500 tracking-wider">Agency Fix</span>
                 <p className="text-[11px] text-slate-700 dark:text-slate-350 italic mt-0.5">
                   "{localSeo.googleBusinessProfile.recommendation}"
                 </p>
+                <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1 border-t border-slate-100/50 dark:border-slate-800/25">
+                  Source: <span className="font-semibold">{localSeo.googleBusinessProfile.sourceApi || "Google Places API"}</span> | Field: <span className="font-semibold">{localSeo.googleBusinessProfile.originalField || "placeDetails.business_status"}</span>
+                </div>
               </div>
             </div>
 
@@ -131,11 +134,14 @@ export const LocalSeoPanel: React.FC<LocalSeoPanelProps> = ({ report }) => {
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
                 {localSeo.napConsistency.details}
               </p>
-              <div className="border-t border-slate-50 pt-2.5">
+              <div className="border-t border-slate-50 pt-2.5 space-y-1">
                 <span className="block text-[9px] font-mono uppercase text-indigo-500 tracking-wider">Agency Fix</span>
                 <p className="text-[11px] text-slate-700 dark:text-slate-350 italic mt-0.5">
                   "{localSeo.napConsistency.recommendation}"
                 </p>
+                <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1 border-t border-slate-100/50 dark:border-slate-800/25">
+                  Source: <span className="font-semibold">{localSeo.napConsistency.sourceApi || "Google Places API"}</span> | Field: <span className="font-semibold">{localSeo.napConsistency.originalField || "placeDetails.formatted_address, placeDetails.formatted_phone_number"}</span>
+                </div>
               </div>
             </div>
 
@@ -154,11 +160,14 @@ export const LocalSeoPanel: React.FC<LocalSeoPanelProps> = ({ report }) => {
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
                 {localSeo.localCitations.details}
               </p>
-              <div className="border-t border-slate-50 pt-2.5">
+              <div className="border-t border-slate-50 pt-2.5 space-y-1">
                 <span className="block text-[9px] font-mono uppercase text-indigo-500 tracking-wider">Agency Fix</span>
                 <p className="text-[11px] text-slate-700 dark:text-slate-350 italic mt-0.5">
                   "{localSeo.localCitations.recommendation}"
                 </p>
+                <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1 border-t border-slate-100/50 dark:border-slate-800/25">
+                  Source: <span className="font-semibold">{localSeo.localCitations.sourceApi || "Google Places API"}</span> | Field: <span className="font-semibold">{localSeo.localCitations.originalField || "placeDetails.formatted_address"}</span>
+                </div>
               </div>
             </div>
 
@@ -173,17 +182,25 @@ export const LocalSeoPanel: React.FC<LocalSeoPanelProps> = ({ report }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
               
-              <div className="md:col-span-4 bg-slate-50 dark:bg-slate-950 p-5 rounded-xl border border-slate-100 dark:border-slate-900 text-center space-y-2">
-                <span className="block text-[10px] font-mono uppercase text-slate-400">Average Rating Index</span>
-                <div className="flex items-center justify-center gap-1.5">
-                  <Star className="w-6 h-6 text-amber-400 fill-amber-400" />
-                  <span className="text-3xl font-display font-bold text-slate-900 dark:text-white">
-                    {localSeo.reviewsAnalysis.averageRating}
-                  </span>
-                  <span className="text-slate-400 text-xs">/5.0</span>
+              <div className="md:col-span-4 bg-slate-50 dark:bg-slate-950 p-5 rounded-xl border border-slate-100 dark:border-slate-900 text-center space-y-3.5 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <span className="block text-[10px] font-mono uppercase text-slate-400 font-semibold tracking-wider">Average Rating Index</span>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Star className="w-6 h-6 text-amber-400 fill-amber-400" />
+                    <span className="text-3xl font-display font-bold text-slate-900 dark:text-white">
+                      {localSeo.reviewsAnalysis.averageRating}
+                    </span>
+                    <span className="text-slate-400 text-xs">/5.0</span>
+                  </div>
+                  <div className="text-xs text-slate-500 font-medium">
+                    Parsed {localSeo.reviewsAnalysis.totalReviews} total reviews across Google Maps & Yelp
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500 font-medium">
-                  Parsed {localSeo.reviewsAnalysis.totalReviews} total reviews across Google Maps & Yelp
+                <div className="text-[8.5px] font-mono text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-200/50 dark:border-slate-800/40 text-left space-y-1">
+                  <div><strong>Rating API:</strong> {localSeo.reviewsAnalysis.averageRatingSource || "Google Places API"}</div>
+                  <div><strong>Rating Field:</strong> {localSeo.reviewsAnalysis.averageRatingField || "placeDetails.rating"}</div>
+                  <div><strong>Reviews API:</strong> {localSeo.reviewsAnalysis.totalReviewsSource || "Google Places API"}</div>
+                  <div><strong>Reviews Field:</strong> {localSeo.reviewsAnalysis.totalReviewsField || "placeDetails.user_ratings_total"}</div>
                 </div>
               </div>
 

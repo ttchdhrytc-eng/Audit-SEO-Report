@@ -182,9 +182,15 @@ export const ExecutiveSummaryPanel: React.FC<ExecutiveSummaryPanelProps> = ({ re
               <span className="block text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Authority Score
               </span>
-              <span className="text-lg font-display font-medium text-slate-900 dark:text-white flex items-center gap-1.5 mt-0.5">
-                {report.competitors.competitors[1]?.authority || 45}
-                <span className="text-xs text-slate-400 font-normal">/100</span>
+              <span className="text-lg font-display font-medium text-slate-900 dark:text-white flex items-center gap-1.5 mt-0.5 font-mono text-xs">
+                {typeof report.competitors.competitors[1]?.authority === 'number' ? (
+                  <>
+                    {report.competitors.competitors[1].authority}
+                    <span className="text-xs text-slate-400 font-normal">/100</span>
+                  </>
+                ) : (
+                  "Data Unavailable"
+                )}
               </span>
             </div>
 
@@ -192,9 +198,15 @@ export const ExecutiveSummaryPanel: React.FC<ExecutiveSummaryPanelProps> = ({ re
               <span className="block text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Backlink Deficit
               </span>
-              <span className="text-lg font-display font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
-                <TrendingUp className="w-4 h-4 flex-shrink-0" />
-                {((report.competitors.competitors[1]?.backlinks || 2000) - 150).toLocaleString()}
+              <span className="text-lg font-display font-medium text-slate-900 dark:text-white flex items-center gap-1 mt-0.5 font-mono text-xs">
+                {typeof report.competitors.competitors[1]?.backlinks === 'number' ? (
+                  <>
+                    <TrendingUp className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                    <span className="text-amber-600">{report.competitors.competitors[1].backlinks.toLocaleString()}</span>
+                  </>
+                ) : (
+                  "Data Unavailable"
+                )}
               </span>
             </div>
 
@@ -202,8 +214,8 @@ export const ExecutiveSummaryPanel: React.FC<ExecutiveSummaryPanelProps> = ({ re
               <span className="block text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Keyword Gaps
               </span>
-              <span className="text-lg font-display font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1 mt-0.5">
-                {report.competitors.keywordGaps.length} Critical
+              <span className="text-lg font-display font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1 mt-0.5 font-mono text-xs">
+                {report.competitors.keywordGaps.length > 0 ? `${report.competitors.keywordGaps.length} Actionable` : "Data Unavailable"}
               </span>
             </div>
           </div>

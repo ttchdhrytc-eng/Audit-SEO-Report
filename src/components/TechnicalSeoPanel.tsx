@@ -70,13 +70,16 @@ export const TechnicalSeoPanel: React.FC<TechnicalSeoPanelProps> = ({ report }) 
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
             {metric.details}
           </p>
-          <div className="border-t border-slate-50 dark:border-slate-950/40 pt-2.5 mt-2.5">
+          <div className="border-t border-slate-50 dark:border-slate-950/40 pt-2.5 mt-2.5 flex flex-col space-y-1">
             <span className="block text-[10px] font-mono uppercase text-indigo-500 dark:text-indigo-400 font-semibold tracking-wider">
               Priority Fix
             </span>
             <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 italic">
               "{metric.recommendation}"
             </p>
+            <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1 border-t border-slate-100/50 dark:border-slate-800/25">
+              Source: <span className="font-semibold">{metric.sourceApi || "HTML Raw Crawler"}</span> | Field: <span className="font-semibold">{metric.originalField || "document_crawled_attribute"}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -142,79 +145,99 @@ export const TechnicalSeoPanel: React.FC<TechnicalSeoPanelProps> = ({ report }) 
         {/* The 4 Core Metrics Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* LCP */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Largest Contentful Paint</span>
-              <span className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">LCP</span>
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Largest Contentful Paint</span>
+                <span className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">LCP</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {technical.coreWebVitals.lcp.value}
+                </span>
+                <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.lcp.rating).text}`}>
+                  {technical.coreWebVitals.lcp.rating}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
+                Main content load latency. Recommendation: Max 2.5s.
+              </p>
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                {technical.coreWebVitals.lcp.value}
-              </span>
-              <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.lcp.rating).text}`}>
-                {technical.coreWebVitals.lcp.rating}
-              </span>
+            <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1.5 border-t border-slate-100/50 dark:border-slate-800/25">
+              Source: <span className="font-semibold">{technical.coreWebVitals.lcp.sourceApi || "Google PageSpeed Insights API"}</span> | Field: <span className="font-semibold">{technical.coreWebVitals.lcp.originalField || "lighthouseResult.audits['largest-contentful-paint']"}</span>
             </div>
-            <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
-              Main content load latency. Recommendation: Max 2.5s.
-            </p>
           </div>
 
           {/* CLS */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Cumulative Layout Shift</span>
-              <span className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">CLS</span>
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Cumulative Layout Shift</span>
+                <span className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">CLS</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {technical.coreWebVitals.cls.value}
+                </span>
+                <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.cls.rating).text}`}>
+                  {technical.coreWebVitals.cls.rating}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
+                Visual movement parity. Recommendation: Max 0.10.
+              </p>
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                {technical.coreWebVitals.cls.value}
-              </span>
-              <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.cls.rating).text}`}>
-                {technical.coreWebVitals.cls.rating}
-              </span>
+            <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1.5 border-t border-slate-100/50 dark:border-slate-800/25">
+              Source: <span className="font-semibold">{technical.coreWebVitals.cls.sourceApi || "Google PageSpeed Insights API"}</span> | Field: <span className="font-semibold">{technical.coreWebVitals.cls.originalField || "lighthouseResult.audits['cumulative-layout-shift']"}</span>
             </div>
-            <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
-              Visual movement parity. Recommendation: Max 0.10.
-            </p>
           </div>
 
           {/* INP */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Interaction to Next Paint</span>
-              <span className="bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">INP</span>
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Interaction to Next Paint</span>
+                <span className="bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">INP</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {technical.coreWebVitals.inp.value}
+                </span>
+                <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.inp.rating).text}`}>
+                  {technical.coreWebVitals.inp.rating}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
+                Click & touch layout latency. Target: Under 200ms.
+              </p>
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                {technical.coreWebVitals.inp.value}
-              </span>
-              <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.inp.rating).text}`}>
-                {technical.coreWebVitals.inp.rating}
-              </span>
+            <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1.5 border-t border-slate-100/50 dark:border-slate-800/25">
+              Source: <span className="font-semibold">{technical.coreWebVitals.inp.sourceApi || "Google PageSpeed Insights API"}</span> | Field: <span className="font-semibold">{technical.coreWebVitals.inp.originalField || "lighthouseResult.audits['interactive']"}</span>
             </div>
-            <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
-              Click & touch layout latency. Target: Under 200ms.
-            </p>
           </div>
 
           {/* TTFB */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Time to First Byte</span>
-              <span className="bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">TTFB</span>
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">Time to First Byte</span>
+                <span className="bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">TTFB</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {technical.coreWebVitals.ttfb.value}
+                </span>
+                <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.ttfb.rating).text}`}>
+                  {technical.coreWebVitals.ttfb.rating}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
+                Initial server response speeds. Target: Under 800ms.
+              </p>
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                {technical.coreWebVitals.ttfb.value}
-              </span>
-              <span className={`text-xs font-semibold capitalize ${getVitalsRatingColor(technical.coreWebVitals.ttfb.rating).text}`}>
-                {technical.coreWebVitals.ttfb.rating}
-              </span>
+            <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 pt-1.5 mt-1.5 border-t border-slate-100/50 dark:border-slate-800/25">
+              Source: <span className="font-semibold">{technical.coreWebVitals.ttfb.sourceApi || "Google PageSpeed Insights API"}</span> | Field: <span className="font-semibold">{technical.coreWebVitals.ttfb.originalField || "lighthouseResult.audits['server-response-time']"}</span>
             </div>
-            <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 leading-relaxed">
-              Initial server response speeds. Target: Under 800ms.
-            </p>
           </div>
         </div>
 
