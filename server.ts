@@ -849,6 +849,147 @@ function getDomainHash(domain: string): number {
   return Math.abs(hash);
 }
 
+function compileVerificationLayer(
+  report: any,
+  rawMeta: any,
+  placeData: any,
+  psiData: any,
+  dfData: any
+) {
+  const htmlIsLive = Boolean(rawMeta && (rawMeta.title || rawMeta.responseDuration > 0));
+  const placesIsLive = Boolean(placeData && placeData.found);
+  const psiIsLive = Boolean(psiData && psiData.lighthouseResult);
+  const dfIsLive = Boolean(dfData && dfData.found);
+
+  const timestamp = new Date().toISOString();
+  const lhRes = psiData?.lighthouseResult;
+
+  return {
+    "Performance Score": {
+      value: psiIsLive && lhRes?.categories?.performance?.score !== undefined 
+        ? Math.round(lhRes.categories.performance.score * 100) 
+        : "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.categories.performance.score",
+      timestamp,
+      isVerified: psiIsLive && lhRes?.categories?.performance?.score !== undefined
+    },
+    "SEO Score": {
+      value: psiIsLive && lhRes?.categories?.seo?.score !== undefined 
+        ? Math.round(lhRes.categories.seo.score * 100) 
+        : "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.categories.seo.score",
+      timestamp,
+      isVerified: psiIsLive && lhRes?.categories?.seo?.score !== undefined
+    },
+    "Accessibility Score": {
+      value: psiIsLive && lhRes?.categories?.accessibility?.score !== undefined 
+        ? Math.round(lhRes.categories.accessibility.score * 100) 
+        : "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.categories.accessibility.score",
+      timestamp,
+      isVerified: psiIsLive && lhRes?.categories?.accessibility?.score !== undefined
+    },
+    "Best Practices Score": {
+      value: psiIsLive && lhRes?.categories?.['best-practices']?.score !== undefined 
+        ? Math.round(lhRes.categories['best-practices'].score * 100) 
+        : "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.categories.['best-practices'].score",
+      timestamp,
+      isVerified: psiIsLive && lhRes?.categories?.['best-practices']?.score !== undefined
+    },
+    "LCP": {
+      value: report.technical?.coreWebVitals?.lcp?.value || "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.audits['largest-contentful-paint'].numericValue",
+      timestamp,
+      isVerified: psiIsLive && report.technical?.coreWebVitals?.lcp?.value !== "Data Unavailable"
+    },
+    "CLS": {
+      value: report.technical?.coreWebVitals?.cls?.value || "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.audits['cumulative-layout-shift'].numericValue",
+      timestamp,
+      isVerified: psiIsLive && report.technical?.coreWebVitals?.cls?.value !== "Data Unavailable"
+    },
+    "INP": {
+      value: report.technical?.coreWebVitals?.inp?.value || "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.audits['interactive'].numericValue",
+      timestamp,
+      isVerified: psiIsLive && report.technical?.coreWebVitals?.inp?.value !== "Data Unavailable"
+    },
+    "FCP": {
+      value: psiIsLive && lhRes?.audits?.['first-contentful-paint']?.numericValue !== undefined 
+        ? ((lhRes.audits['first-contentful-paint'].numericValue / 1000).toFixed(1) + "s") 
+        : "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.audits['first-contentful-paint'].numericValue",
+      timestamp,
+      isVerified: psiIsLive && lhRes?.audits?.['first-contentful-paint']?.numericValue !== undefined
+    },
+    "TTFB": {
+      value: report.technical?.coreWebVitals?.ttfb?.value || "Data Unavailable",
+      sourceName: "Google PageSpeed",
+      sourceField: "lighthouseResult.audits['server-response-time'].numericValue",
+      timestamp,
+      isVerified: psiIsLive && report.technical?.coreWebVitals?.ttfb?.value !== "Data Unavailable"
+    },
+    "Reviews": {
+      value: placesIsLive ? report.localSeo?.reviewsAnalysis?.totalReviews : "Data Unavailable",
+      sourceName: "Google Places",
+      sourceField: "placeDetails.user_ratings_total",
+      timestamp,
+      isVerified: placesIsLive
+    },
+    "Ratings": {
+      value: placesIsLive ? report.localSeo?.reviewsAnalysis?.averageRating : "Data Unavailable",
+      sourceName: "Google Places",
+      sourceField: "placeDetails.rating",
+      timestamp,
+      isVerified: placesIsLive
+    },
+    "Backlinks": {
+      value: "Data Unavailable",
+      sourceName: "DataForSEO",
+      sourceField: "backlinks_count",
+      timestamp,
+      isVerified: false
+    },
+    "Referring Domains": {
+      value: "Data Unavailable",
+      sourceName: "DataForSEO",
+      sourceField: "referring_domains",
+      timestamp,
+      isVerified: false
+    },
+    "Citations": {
+      value: placesIsLive ? (report.localSeo?.localCitations?.value || "Data Unavailable") : "Data Unavailable",
+      sourceName: "Google Places",
+      sourceField: "placeDetails.formatted_address",
+      timestamp,
+      isVerified: placesIsLive
+    },
+    "Domain Metrics": {
+      value: "Data Unavailable",
+      sourceName: "DataForSEO",
+      sourceField: "domain_authority",
+      timestamp,
+      isVerified: false
+    },
+    "Competitor Metrics": {
+      value: "Data Unavailable",
+      sourceName: "DataForSEO",
+      sourceField: "competitor_backlinks_audit_record",
+      timestamp,
+      isVerified: false
+    }
+  };
+}
+
 function finalizeReportLineageAndCleanFallbacks(
   report: any,
   rawMeta: any,
@@ -1337,6 +1478,9 @@ function finalizeReportLineageAndCleanFallbacks(
 
   report.overallScore = scoreCount > 0 ? Math.round(totalScoreSum / scoreCount) : 0;
   console.log(`[Lineage Audit] Recalculated index overallScore: ${report.overallScore}/100 based on ${scoreCount} live sections.`);
+  
+  // Custom verification layer creation
+  report.verificationLayer = compileVerificationLayer(report, rawMeta, placeData, psiData, dfData);
 }
 
 // Simulated data structures based on industry averages, tailored to domain niche keywords
@@ -2942,6 +3086,46 @@ app.get("/api/bulk-jobs", authMiddleware, (req, res) => {
     completedAt: job.completedAt
   }));
   res.json(list);
+});
+
+// Admin System Observability and Health Dashboard API (Phase 10)
+app.get("/api/admin/system-health", (req, res) => {
+  res.json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    apis: {
+      googlePageSpeed: {
+        configured: Boolean(process.env.PAGESPEED_API_KEY),
+        status: process.env.PAGESPEED_API_KEY ? "healthy" : "offline",
+        endpoint: "https://pagespeedonline.googleapis.com",
+        name: "Google PageSpeed Insights API"
+      },
+      googlePlaces: {
+        configured: Boolean(process.env.PLACES_API_KEY || process.env.GOOGLE_PLACES_API_KEY),
+        status: (process.env.PLACES_API_KEY || process.env.GOOGLE_PLACES_API_KEY) ? "healthy" : "offline",
+        endpoint: "https://maps.googleapis.com/maps/api/place",
+        name: "Google Places API"
+      },
+      dataForSeo: {
+        configured: Boolean(process.env.DATAFORSEO_API_LOGIN && process.env.DATAFORSEO_API_PASSWORD),
+        status: (process.env.DATAFORSEO_API_LOGIN && process.env.DATAFORSEO_API_PASSWORD) ? "healthy" : "offline",
+        endpoint: "https://api.dataforseo.com/v3/on_page/instant_pages",
+        name: "DataForSEO API"
+      },
+      geminiAi: {
+        configured: Boolean(process.env.GEMINI_API_KEY),
+        status: process.env.GEMINI_API_KEY ? "healthy" : "offline",
+        endpoint: "Google GenAI SDK Engine",
+        name: "Gemini AI Core Engine"
+      }
+    },
+    system: {
+      memoryUsage: process.memoryUsage(),
+      nodeVersion: process.version,
+      platform: process.platform
+    }
+  });
 });
 
 

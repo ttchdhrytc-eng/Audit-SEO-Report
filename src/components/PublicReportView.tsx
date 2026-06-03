@@ -6,7 +6,7 @@ import { OnPageSeoPanel } from './OnPageSeoPanel';
 import { CompetitorGapPanel } from './CompetitorGapPanel';
 import { LocalSeoPanel } from './LocalSeoPanel';
 import { AiRoadmapPanel } from './AiRoadmapPanel';
-import { FileText, Printer, ArrowLeft, Download, ShieldCheck, Sparkles, Globe } from 'lucide-react';
+import { FileText, Printer, ArrowLeft, Download, ShieldCheck, Sparkles, Globe, Check } from 'lucide-react';
 
 interface PublicReportViewProps {
   report: WebsiteAuditReport;
@@ -160,6 +160,47 @@ export const PublicReportView: React.FC<PublicReportViewProps> = ({
       {/* Main Single Page Printable Report Space */}
       <div className="max-w-5xl mx-auto px-6 md:px-12 pt-8 space-y-10">
         
+        {/* Printable cover page layout (Phase 8 Premium Cover Page) */}
+        <div className="hidden print:flex flex-col justify-between h-[28cm] p-16 border-[12px] border-slate-900 bg-white relative w-full mb-10">
+          <div className="space-y-12">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-xs" style={{ backgroundColor: themeColor }}>
+                {logoLetter}
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-2xl font-bold font-display text-slate-900 tracking-tight">{agencyName}</h1>
+                <p className="text-xs text-indigo-650 font-mono uppercase tracking-wider font-bold">Enterprise performance & value evaluation</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-16">
+              <span className="bg-slate-100 text-slate-800 text-[10px] font-mono uppercase tracking-widest font-extrabold px-3 py-1.5 rounded">
+                SEO Audit Diagnostic Report
+              </span>
+              <h2 className="font-black font-display text-slate-950 tracking-tight leading-none pt-4 text-5xl md:text-6xl">
+                {report.domain}
+              </h2>
+              <div className="h-2 w-32 bg-indigo-600 rounded-full my-4" />
+              <p className="text-slate-500 font-sans text-sm max-w-xl leading-relaxed pt-2">
+                A highly detailed evaluation auditing technical latency budgets, semantic taxonomies, crawlability routing chains, backlink deficits, and local search Pack coherence metrics.
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-8 flex items-center justify-between">
+            <div className="space-y-1 text-left">
+              <span className="text-[9px] uppercase font-mono tracking-wider text-slate-450 block font-medium">Prepared For</span>
+              <span className="text-sm font-bold text-slate-800 font-sans">{report.companyName}</span>
+            </div>
+            <div className="space-y-1 text-right">
+              <span className="text-[9px] uppercase font-mono tracking-wider text-slate-450 block font-medium">Generation Date</span>
+              <span className="text-sm font-bold text-slate-850 font-mono">{new Date(report.generatedAt).toLocaleDateString()}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden print:block page-break break-after-page" style={{ pageBreakAfter: 'always' }} />
+
         {/* Printable White-Label header block */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="flex items-center gap-4">
@@ -220,6 +261,54 @@ export const PublicReportView: React.FC<PublicReportViewProps> = ({
             <p className="text-slate-700 leading-relaxed text-sm font-normal text-slate-755">
               {report.executiveSummary}
             </p>
+          </div>
+
+          {/* Section: Audit Data Integrity & Verification Ledger (Phase 6 Validator) */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-xs space-y-4 print:break-inside-avoid">
+            <h3 className="text-md font-bold font-display text-slate-900 border-b pb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Check className="w-5 h-5 text-emerald-600" />
+                Audit Data Integrity & Verification Ledger
+              </span>
+              <span className="bg-emerald-50 text-emerald-700 border border-emerald-250 text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold">
+                Standards Compliant
+              </span>
+            </h3>
+            <p className="text-slate-500 text-xs leading-relaxed font-sans max-w-3xl">
+              This registry validates the status of every primary valuation index recorded in this valuation workspace. Green badges represent verified, real-time client API records. Yellow labels identify unverified or disconnected data pipelines.
+            </p>
+            <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              <table className="w-full text-left text-xs font-mono border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-slate-400 uppercase font-bold text-[9px] tracking-wider">
+                    <th className="px-4 py-3 font-sans">Metric / Diagnostic Channel</th>
+                    <th className="px-4 py-3">Source API Platform</th>
+                    <th className="px-4 py-3">Original Bound API Field</th>
+                    <th className="px-4 py-3 text-center">Status Badge</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {Object.entries(report.verificationLayer || {}).map(([metricName, detail]: [string, any]) => (
+                    <tr key={metricName} className="hover:bg-slate-50/20 text-slate-700">
+                      <td className="px-4 py-2.5 font-sans font-bold text-slate-800">{metricName}</td>
+                      <td className="px-4 py-2.5 font-mono text-slate-600">{detail.sourceName}</td>
+                      <td className="px-4 py-2.5 font-mono text-slate-400 max-w-[280px] truncate select-all">{detail.sourceField}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        {detail.isVerified ? (
+                          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold border border-emerald-250">
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold border border-amber-250">
+                            Unverified
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Section: Prioritized Technical Audit Checklists */}

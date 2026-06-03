@@ -19,6 +19,7 @@ import { AiRoadmapPanel } from './components/AiRoadmapPanel';
 import { AiOutreachScriptPanel } from './components/AiOutreachScriptPanel';
 import { GoogleSearchConsolePanel } from './components/GoogleSearchConsolePanel';
 import { PublicReportView } from './components/PublicReportView';
+import { AdminSystemHealth } from './components/AdminSystemHealth';
 import { AiKeywordStrategistPanel } from './components/AiKeywordStrategistPanel';
 import { getApiUrl, getAuthHeaders, setAuthToken, getAuthToken, safeLocalStorage } from './utils/api';
 import {   Building2, 
@@ -168,6 +169,7 @@ export default function App() {
 
   // Standalone public report states
   const [isPublicReportView, setIsPublicReportView] = useState(false);
+  const [isAdminHealthView, setIsAdminHealthView] = useState(false);
   const [publicReportDomain, setPublicReportDomain] = useState('');
   const [publicReport, setPublicReport] = useState<WebsiteAuditReport | null>(null);
   const [loadingPublicReport, setLoadingPublicReport] = useState(false);
@@ -181,6 +183,8 @@ export default function App() {
         setIsPublicReportView(true);
         setPublicReportDomain(domainVal);
       }
+    } else if (path.startsWith('/admin/system-health')) {
+      setIsAdminHealthView(true);
     }
   }, []);
 
@@ -443,17 +447,39 @@ export default function App() {
   const handleLaunchSingleScan = async (urlName: string, company: string, type: 'Standard' | 'Enterprise' | 'Local') => {
     if (!urlName) return;
     setIsScanning(true);
-    setScanProgress(5);
-    setScanStep('Initializing crawl spiders...');
+    setScanProgress(0);
     setScanError(null);
 
-    // Fake visual ticker for granular feedback
-    const timers = [
-      setTimeout(() => { setScanProgress(20); setScanStep('Crawling subfolders metadata...'); }, 600),
-      setTimeout(() => { setScanProgress(45); setScanStep('Extracting heading tags and checking SSL HTTPS parameters...'); }, 1200),
-      setTimeout(() => { setScanProgress(68); setScanStep('Mapping keyword density & parsing NLP authority entities...'); }, 2000),
-      setTimeout(() => { setScanProgress(85); setScanStep('Connecting Gemini AI recommendation engines...'); }, 2800),
+    const stages = [
+      { prg: 8, msg: 'Stage 1: Initializing Spiders... establishing connection handshake' },
+      { prg: 20, msg: 'Stage 2: DNS Probes & SSL encryption validation' },
+      { prg: 32, msg: 'Stage 3: Crawler Parsing HTML... scraping metadata outline & heading tags' },
+      { prg: 48, msg: 'Stage 4: Fetching Google PageSpeed Insights & Core Web Vitals diagnostics' },
+      { prg: 62, msg: 'Stage 5: Google Maps Regional Coordinates & GBP Completeness Scan' },
+      { prg: 75, msg: 'Stage 6: Compiling Competitor Backlinks... analyzing SERP overlap deficit' },
+      { prg: 85, msg: 'Stage 7: Running Gemini Recommendation AI to build strategic priorities' },
+      { prg: 94, msg: 'Stage 8: Verifying Metric Sources & compiling data integrity verification ledger' },
     ];
+
+    setScanStep(stages[0].msg);
+
+    let progressLocal = 1;
+    const interval = setInterval(() => {
+      progressLocal += Math.floor(Math.random() * 2) + 1;
+      if (progressLocal > 98) {
+        progressLocal = 98;
+      }
+      setScanProgress(progressLocal);
+
+      // Find active stage
+      let activeMsg = stages[0].msg;
+      for (let i = 0; i < stages.length; i++) {
+        if (progressLocal >= stages[i].prg) {
+          activeMsg = stages[i].msg;
+        }
+      }
+      setScanStep(activeMsg);
+    }, 380);
 
     try {
       const response = await fetch(getApiUrl('/api/audit'), {
@@ -466,7 +492,7 @@ export default function App() {
         })
       });
       
-      timers.forEach(t => clearTimeout(t));
+      clearInterval(interval);
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
@@ -502,7 +528,7 @@ export default function App() {
 
     } catch (err: any) {
       console.error("Crawl process errored out", err);
-      timers.forEach(t => clearTimeout(t));
+      clearInterval(interval);
       setScanError(err?.message || "An unexpected network error occurred while crawling target website.");
       setIsScanning(false);
     }
@@ -745,6 +771,10 @@ export default function App() {
         </button>
       </div>
     );
+  }
+
+  if (isAdminHealthView) {
+    return <AdminSystemHealth />;
   }
 
   return (

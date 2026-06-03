@@ -157,6 +157,13 @@ export interface WebsiteAuditReport {
   localSeo: LocalSeoAudit;
   recommendations: AiRecommendation[];
   outreachScript?: string;
+  verificationLayer?: Record<string, {
+    value: any;
+    sourceName: string;
+    sourceField: string;
+    timestamp: string;
+    isVerified: boolean;
+  }>;
 }
 
 export interface AuditQueueItem {
